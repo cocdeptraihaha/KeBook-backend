@@ -8,9 +8,9 @@ pydantic[email]>=2.5.0
 pydantic-settings>=2.1.0
 python-dotenv>=1.0.0
 
-# Database (async MySQL)
+# Database (async, SQLite + optional MySQL)
 sqlalchemy[asyncio]>=2.0.0
-asyncmy>=0.2.9
+aiomysql>=0.2.0
 
 # Auth (bcrypt 4.3.0 dùng trực tiếp, không qua passlib)
 python-jose[cryptography]>=3.3.0

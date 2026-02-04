@@ -10,7 +10,7 @@ Backend FastAPI async với **JWT auth**, **đăng ký/kích hoạt bằng OTP q
 
 - **Auth**: đăng ký → gửi OTP → verify OTP kích hoạt → login lấy JWT  
 - **Forgot password**: gửi OTP → reset password  
-- **Async SQLAlchemy**: hỗ trợ MySQL (driver `asyncmy`) và có default SQLite nếu không set `.env`  
+- **Async SQLAlchemy**: hỗ trợ MySQL (driver `aiomysql`) và có default SQLite nếu không set `.env`  
 - **Background cleanup**: định kỳ dọn OTP hết hạn và user chưa kích hoạt có OTP đã hết hạn  
 
 ---
@@ -59,7 +59,7 @@ cp .env.example .env    # Linux/macOS
 #### Các biến quan trọng trong `.env`
 
 - **DATABASE_URL**: DSN database (ưu tiên MySQL async)
-  - Ví dụ local MySQL: `mysql+asyncmy://user:password@localhost:3306/kebook`
+  - Ví dụ local MySQL: `mysql+aiomysql://user:password@localhost:3306/kebook`
   - Nếu không set sẽ dùng default trong code (SQLite async)
 - **SECRET_KEY**: bắt buộc đổi khi chạy production
 - **SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD/SMTP_FROM_EMAIL**: dùng để gửi OTP
@@ -71,7 +71,7 @@ cp .env.example .env    # Linux/macOS
 
 - Cài và chạy MySQL (XAMPP, MySQL Server, Docker...).
 - Tạo database: `CREATE DATABASE kebook;`
-- Trong `.env` đặt: `DATABASE_URL=mysql+asyncmy://user:password@localhost:3306/kebook`
+- Trong `.env` đặt: `DATABASE_URL=mysql+aiomysql://user:password@localhost:3306/kebook`
 
 ---
 
@@ -229,7 +229,7 @@ pytest -v
 
 - **FastAPI** – Web framework  
 - **SQLAlchemy 2 (async)** – ORM, session  
-- **asyncmy** – Driver async cho MySQL  
+- **aiomysql** – Driver async cho MySQL  
 - **Pydantic v2** – Validation, config  
 - **pydantic-settings** – Load settings từ `.env`  
 - **python-jose** – JWT  
@@ -241,7 +241,7 @@ pytest -v
 ## 9. Lưu ý
 
 - Đổi `SECRET_KEY` và không commit `.env` lên git.  
-- Database: nếu dùng MySQL (`asyncmy`) hãy đảm bảo MySQL đã chạy và tạo database trước (ví dụ `CREATE DATABASE kebook;`).  
+- Database: nếu dùng MySQL (`aiomysql`) hãy đảm bảo MySQL đã chạy và tạo database trước (ví dụ `CREATE DATABASE kebook;`).  
 - CORS đang cho phép mọi origin (`*`); production nên giới hạn domain.
 
 Nếu cần thêm endpoint hoặc đổi cấu trúc, có thể mở rộng từ template này (thêm model, repository, service, router tương tự `users`).

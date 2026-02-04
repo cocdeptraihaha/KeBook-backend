@@ -15,9 +15,9 @@ def _get_engine_url_and_connect_args():
     url = settings.DATABASE_URL
     connect_args = {}
 
-    # Sửa lỗi URL dạng mysql+asyncmy://mysql://... -> mysql+asyncmy://...
-    if "mysql+asyncmy://mysql://" in url:
-        url = url.replace("mysql+asyncmy://mysql://", "mysql+asyncmy://")
+    # Sửa lỗi URL dạng mysql+aiomysql://mysql://... -> mysql+aiomysql://...
+    if "mysql+aiomysql://mysql://" in url:
+        url = url.replace("mysql+aiomysql://mysql://", "mysql+aiomysql://")
 
     if "mysql" not in url:
         # SQLite: không cần xử lý gì
@@ -31,7 +31,7 @@ def _get_engine_url_and_connect_args():
     ssl_mode = query.pop("ssl-mode", query.pop("ssl_mode", [None]))[0]
     need_ssl = ssl_mode == "REQUIRED" or ssl_mode == "required"
     
-    # Xóa các query params SSL khỏi URL (asyncmy không hỗ trợ trong URL)
+    # Xóa các query params SSL khỏi URL (driver MySQL async không hỗ trợ trong URL)
     new_query = "&".join(f"{k}={v[0]}" for k, v in query.items() if v)
     clean_url = urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
