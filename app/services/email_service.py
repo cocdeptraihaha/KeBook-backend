@@ -23,7 +23,7 @@ class EmailService:
         print(f"[SMTP] Đang gửi email OTP tới {email} ...")
         try:
             msg = MIMEMultipart()
-            msg["From"] = settings.SMTP_FROM_EMAIL or settings.SMTP_USER
+            msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
             msg["To"] = email
             msg["Subject"] = "Mã OTP kích hoạt tài khoản" if otp_type == "activation" else "Mã OTP reset mật khẩu"
 
