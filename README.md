@@ -138,6 +138,16 @@ username=user@example.com&password=matkhau123
 
 Trả về: `{"access_token": "...", "token_type": "bearer"}`
 
+### Logout
+
+```http
+POST /api/v1/auth/logout
+Authorization: Bearer <access_token>
+```
+
+Backend chỉ verify token hợp lệ rồi trả về message.  
+Vì dùng JWT stateless, **logout thực tế là xoá token ở phía client** (localStorage/cookie…).
+
 ### Gọi API cần đăng nhập
 
 Thêm header:

@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Email settings (cho gửi OTP)
-    SMTP_HOST: str = "smtp.mail.yahoo.com"  # Gmail: smtp.gmail.com
+    # Gmail: smtp.gmail.com, port 587, dùng App Password
+    SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""  # Email gửi OTP
     SMTP_PASSWORD: str = ""  # App password (không phải password email thường)
