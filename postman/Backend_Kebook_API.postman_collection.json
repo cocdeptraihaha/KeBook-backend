@@ -1,0 +1,140 @@
+{
+  "info": {
+    "name": "Backend Kebook API",
+    "description": "Collection test API: Register, Verify OTP, Login, Forgot/Reset Password, Users",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": "test@example.com"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"username\": \"testuser\",\n  \"password\": \"test123\",\n  \"full_name\": \"Test User\"\n}"
+            },
+            "url": "{{base_url}}/auth/register",
+            "description": "Đăng ký user mới. OTP gửi qua email (hoặc in console)."
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp_code\": \"123456\"\n}"
+            },
+            "url": "{{base_url}}/auth/verify-otp",
+            "description": "Verify OTP để kích hoạt tài khoản. Thay 123456 bằng mã OTP thật."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "{{email}}" },
+                { "key": "password", "value": "test123" }
+              ]
+            },
+            "url": "{{base_url}}/auth/login",
+            "description": "Đăng nhập. Sau khi chạy, copy access_token vào biến token."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/forgot-password",
+            "description": "Gửi OTP reset password qua email."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp_code\": \"123456\",\n  \"new_password\": \"newpass123\"\n}"
+            },
+            "url": "{{base_url}}/auth/reset-password",
+            "description": "Reset password với OTP. Thay 123456 bằng mã OTP từ email."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Current User (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/users/me",
+            "description": "Lấy thông tin user đang đăng nhập. Cần token từ Login hoặc Verify OTP."
+          }
+        }
+      ]
+    }
+  ]
+}
