@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""  # Email gửi OTP
     SMTP_PASSWORD: str = ""  # App password (không phải password email thường)
     SMTP_FROM_EMAIL: str = ""  # Email hiển thị người gửi
+    SMTP_FROM_NAME: str = "KeBook"
     
     # OTP settings
     OTP_EXPIRE_SECONDS: int = 90  # OTP hết hạn sau 90 giây
