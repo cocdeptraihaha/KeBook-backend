@@ -75,5 +75,12 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
-    """Health check."""
+    """Health check (mặc định)."""
     return {"message": "Backend Kebook API", "docs": "/docs"}
+
+
+@app.get("/kaithhealthcheck")
+@app.get("/kaithheathcheck")
+async def kaith_healthcheck():
+    """Health check cho Leapcell."""
+    return {"status": "ok"}
