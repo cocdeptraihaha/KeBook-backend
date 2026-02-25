@@ -86,6 +86,7 @@ class Database:
 
     async def connect(self):
         """Connect to database (create tables)."""
+        import app.models  # noqa: F401 - register all models with Base.metadata
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
