@@ -7,14 +7,22 @@ from datetime import datetime
 class UserBase(BaseModel):
     """Base user schema."""
 
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+    address: Optional[str] = None
+    avatar_url: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
+    gender: Optional[str] = None
+    phone_number: Optional[str] = None
+
+
+class UserCreate(BaseModel):
+    """Schema khi tạo user."""
+
     email: EmailStr
     username: str
     full_name: Optional[str] = None
-
-
-class UserCreate(UserBase):
-    """Schema khi tạo user."""
-
     password: str
 
 
@@ -33,6 +41,11 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     username: Optional[str] = None
     full_name: Optional[str] = None
+    address: Optional[str] = None
+    avatar_url: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
+    gender: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class User(UserBase):

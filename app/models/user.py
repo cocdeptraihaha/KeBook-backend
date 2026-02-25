@@ -1,20 +1,36 @@
-"""User model - khớp với database: id, email, username, hashed_password, full_name, is_active, is_superuser, created_at, updated_at."""
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+"""User model - khớp với database kebookdb."""
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
 
 
 class User(Base):
-    """User table."""
+    """User table - profile + auth fields."""
 
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    # Profile
     full_name = Column(String(255), nullable=True)
+    address = Column(String(255), nullable=True)
+    avatar_url = Column(String(255), nullable=True)
+    date_of_birth = Column(DateTime, nullable=True)
+    gender = Column(String(255), nullable=True)
+    phone_number = Column(String(255), nullable=True)
+    # Soft delete
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime, nullable=True)
+    # Auth
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    username = Column(String(255), unique=True, index=True, nullable=True)
+    hashed_password = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=False)
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    cart_items = relationship("Cart", back_populates="user", foreign_keys="Cart.user_id")
+    orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id")
+    reviews = relationship("Review", back_populates="user", foreign_keys="Review.user_id")
