@@ -25,18 +25,17 @@ class EmailService:
             msg = MIMEMultipart()
             msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
             msg["To"] = email
-            msg["Subject"] = "Mã OTP kích hoạt tài khoản" if otp_type == "activation" else "Mã OTP reset mật khẩu"
+            msg["Subject"] = "Mã OTP kích hoạt tài khoản KeBook" if otp_type == "activation" else "Mã OTP reset mật khẩu KeBook"
 
             body = f"""
             <html>
             <body>
-                <h2>Mã OTP của bạn</h2>
                 <p>Xin chào,</p>
                 <p>Mã OTP của bạn là: <strong style="font-size: 24px; color: #667eea;">{otp_code}</strong></p>
                 <p>Mã này sẽ hết hạn sau {settings.OTP_EXPIRE_SECONDS} giây.</p>
                 <p>Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email này.</p>
                 <hr>
-                <p style="color: #666; font-size: 12px;">Backend Kebook API</p>
+                <p style="color: #666; font-size: 12px;">KeBook Store</p>
             </body>
             </html>
             """
