@@ -1,32 +1,43 @@
 """Book endpoints - sách."""
+from sqlalchemy import select, or_, func
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_pagination import Page
+from fastapi_pagination.ext.sqlalchemy import apaginate
 
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
+from app.models.book import Book
 from app.models.user import User
-from app.schemas.book import Book, BookCreate, BookUpdate, BookWithDetail
+from app.schemas.book import Book as BookSchema, BookCreate, BookUpdate, BookWithDetail
 from app.services.book_service import book_service
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[Book])
+@router.get("/", response_model=Page[BookSchema])
 async def list_books(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
     q: str | None = Query(None, description="Tìm theo title, author"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Danh sách sách (public - không cần auth)."""
+    """Danh sách sách có phân trang (public - không cần auth)."""
+    stmt = (
+        select(Book)
+        .where(Book.is_deleted == False)  # noqa: E712
+        .order_by(Book.id)
+    )
     if q:
-        books = await book_service.search(db, q=q, skip=skip, limit=limit)
-    else:
-        books = await book_service.get_multi_active(db, skip=skip, limit=limit)
-    return books
+        pattern = f"%{q.lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Book.title).like(pattern),
+                func.lower(Book.author).like(pattern),
+            )
+        )
+    return await apaginate(db, stmt)
 
 
-@router.get("/{book_id}", response_model=Book)
+@router.get("/{book_id}", response_model=BookSchema)
 async def get_book(
     book_id: int,
     db: AsyncSession = Depends(get_db),
@@ -38,18 +49,18 @@ async def get_book(
     return book
 
 
-@router.post("/", response_model=Book, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BookSchema, status_code=status.HTTP_201_CREATED)
 async def create_book(
     book_in: BookCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_superuser),
 ):
     """Tạo sách mới (chỉ admin)."""
     book = await book_service.create_book(db, book_in)
     return book
 
 
-@router.patch("/{book_id}", response_model=Book)
+@router.patch("/{book_id}", response_model=BookSchema)
 async def update_book(
     book_id: int,
     book_in: BookUpdate,

@@ -28,9 +28,14 @@ class OTPService:
     async def cleanup_expired_otps_and_inactive_users(
         self, db: AsyncSession
     ) -> tuple[int, int]:
-        """Xóa user chưa kích hoạt (is_active=False) có OTP kích hoạt đã hết hạn, rồi xóa OTP hết hạn. Trả về (số user đã xóa, số OTP đã xóa)."""
+        """
+        Nếu OTP hết hạn mà user của OTP chưa được kích hoạt thì xóa tài khoản.
+        - Lấy email có OTP kích hoạt đã hết hạn
+        - Với mỗi email: nếu user tồn tại, chưa active, chưa bị xóa → xóa user (hard delete để có thể đăng ký lại)
+        - Xóa tất cả OTP đã hết hạn
+        Trả về (số user đã xóa, số OTP đã xóa).
+        """
         now = datetime.utcnow()
-        # Lấy email có OTP kích hoạt đã hết hạn
         result = await db.execute(
             select(OTP.email).where(
                 OTP.expires_at < now,
@@ -40,7 +45,13 @@ class OTPService:
         emails = [row[0] for row in result.fetchall()]
         users_deleted = 0
         for email in emails:
-            r = await db.execute(select(User).where(User.email == email, User.is_active == False))
+            r = await db.execute(
+                select(User).where(
+                    User.email == email,
+                    User.is_active == False,  # noqa: E712
+                    User.is_deleted == False,  # noqa: E712
+                )
+            )
             user = r.scalars().first()
             if user:
                 await db.delete(user)

@@ -1,7 +1,7 @@
 """User schemas - khớp với database."""
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 class UserBase(BaseModel):
@@ -12,7 +12,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     address: Optional[str] = None
     avatar_url: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
+    date_of_birth: Optional[datetime | date] = None  # MySQL DATE -> date, DATETIME -> datetime
     gender: Optional[str] = None
     phone_number: Optional[str] = None
 
@@ -43,7 +43,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     address: Optional[str] = None
     avatar_url: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
+    date_of_birth: Optional[datetime | date] = None
     gender: Optional[str] = None
     phone_number: Optional[str] = None
 

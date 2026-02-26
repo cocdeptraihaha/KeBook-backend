@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
+from fastapi_pagination import add_pagination
+
 from app.api.v1.router import api_router
 from app.core.database import database, AsyncSessionLocal
 from app.services.otp_service import otp_service
@@ -71,6 +73,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+add_pagination(app)
 
 
 @app.get("/")

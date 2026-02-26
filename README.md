@@ -86,6 +86,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - API: `http://localhost:8000`  
 - Swagger UI: `http://localhost:8000/docs`  
 - ReDoc: `http://localhost:8000/redoc`  
+- **API Docs (Markdown)**: `docs/API_DOCS.md` – tài liệu chi tiết các route  
 
 ### Chạy không reload (production-style)
 
@@ -198,12 +199,23 @@ Content-Type: application/json
 ```
 app/
 ├── api/
-│   ├── dependencies.py      # Auth, get_current_user
+│   ├── dependencies.py      # Auth, get_current_user, get_current_superuser
 │   └── v1/
 │       ├── router.py        # Gộp routes v1
 │       └── endpoints/
 │           ├── auth.py      # Register/Login + OTP activation/reset password
-│           └── users.py     # CRUD users (cần JWT)
+│           ├── users.py     # CRUD users (cần JWT)
+│           ├── books.py     # Sách (public + admin)
+│           ├── categories.py
+│           ├── cart.py       # Giỏ hàng
+│           ├── orders.py     # Đơn hàng, checkout
+│           ├── reviews.py    # Đánh giá sách
+│           ├── promotions.py
+│           ├── return_requests.py
+│           ├── notifications.py
+│           ├── support_requests.py
+│           ├── payments.py   # SePay
+│           └── test_utils.py # Test-only (OTP, make-admin)
 ├── core/
 │   ├── config.py            # Settings từ .env
 │   ├── database.py          # Async SQLAlchemy, get_db

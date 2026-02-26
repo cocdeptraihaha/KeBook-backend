@@ -37,6 +37,11 @@ class VerifyOTPRequest(BaseModel):
     otp_code: str
 
 
+class ResendOTPRequest(BaseModel):
+    """Request gửi lại OTP kích hoạt."""
+    email: EmailStr
+
+
 class ForgotPasswordRequest(BaseModel):
     """Request forgot password."""
     email: EmailStr
@@ -100,21 +105,47 @@ async def verify_otp(
         raise HTTPException(status_code=404, detail="Không tìm thấy user")
 
     user.is_active = True
-    await db.commit()
-    await db.refresh(user)
+    await db.flush()
 
-    # Tạo token sau khi activate
+    # Tạo token sau khi activate (get_db sẽ commit khi request hoàn thành)
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=access_token_expires,
     )
 
+    # Chuyển sang schema trước khi trả về để tránh lỗi serialize ORM
+    user_schema = UserSchema.model_validate(user)
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        user=user,
+        user=user_schema,
     )
+
+
+@router.post("/resend-otp")
+async def resend_otp(
+    request: ResendOTPRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Gửi lại OTP kích hoạt cho user chưa active."""
+    user = await user_service.repository.get_by_email(db, request.email)
+    if not user or user.is_active or getattr(user, "is_deleted", False):
+        # Không tiết lộ email có tồn tại hay không (bảo mật)
+        return {
+            "message": "Nếu email tồn tại và chưa kích hoạt, chúng tôi đã gửi mã OTP mới đến email của bạn."
+        }
+
+    await otp_service.create_and_send_otp(
+        db,
+        request.email,
+        OTPType.ACTIVATION,
+    )
+    await db.commit()
+
+    return {
+        "message": "Đã gửi mã OTP mới. Vui lòng kiểm tra email để kích hoạt tài khoản."
+    }
 
 
 @router.post("/forgot-password")
@@ -200,8 +231,9 @@ async def login(
         expires_delta=access_token_expires,
     )
 
+    user_schema = UserSchema.model_validate(user)
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        user=user,
+        user=user_schema,
     )
