@@ -20,7 +20,7 @@ class PromotionRepository(BaseRepository[Promotion, PromotionCreate, PromotionUp
         result = await db.execute(
             select(Promotion).where(
                 Promotion.code == code.strip().upper(),
-                Promotion.is_deleted == False,  # noqa: E712
+                Promotion.deleted_at.is_(None),  # noqa: E712
                 (Promotion.start_date.is_(None)) | (Promotion.start_date <= now),
                 (Promotion.end_date.is_(None)) | (Promotion.end_date >= now),
             )
@@ -36,7 +36,7 @@ class PromotionRepository(BaseRepository[Promotion, PromotionCreate, PromotionUp
         """Danh sách promotion chưa xóa."""
         result = await db.execute(
             select(Promotion)
-            .where(Promotion.is_deleted == False)  # noqa: E712
+            .where(Promotion.deleted_at.is_(None))  # noqa: E712
             .offset(skip)
             .limit(limit)
         )

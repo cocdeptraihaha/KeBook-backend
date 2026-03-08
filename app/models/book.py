@@ -1,5 +1,5 @@
 """Book model."""
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -19,7 +19,6 @@ class Book(Base):
     stock_quantity = Column(Integer, nullable=True)
     title = Column(String(255), nullable=True)
     book_detail_id = Column(Integer, ForeignKey("book_details.id"), nullable=True)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     book_detail = relationship("BookDetail", back_populates="book")

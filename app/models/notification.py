@@ -1,5 +1,5 @@
 """Notification model."""
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -14,7 +14,6 @@ class Notification(Base):
     send_date = Column(DateTime, nullable=True)
     title = Column(String(255), nullable=True)
     type = Column(String(255), nullable=True)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     user_notifications = relationship("UserNotification", back_populates="notification")

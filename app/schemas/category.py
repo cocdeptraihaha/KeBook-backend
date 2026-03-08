@@ -20,7 +20,6 @@ class CategoryUpdate(BaseModel):
 
 class Category(CategoryBase):
     id: int
-    is_deleted: bool = False
     deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

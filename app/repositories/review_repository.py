@@ -24,7 +24,7 @@ class ReviewRepository(BaseRepository[Review, ReviewCreate, ReviewUpdate]):
             select(Review)
             .where(
                 Review.book_id == book_id,
-                Review.is_deleted == False,  # noqa: E712
+                Review.deleted_at.is_(None),  # noqa: E712
             )
             .options(selectinload(Review.user))
             .order_by(Review.create_at.desc())
@@ -41,7 +41,7 @@ class ReviewRepository(BaseRepository[Review, ReviewCreate, ReviewUpdate]):
             select(Review).where(
                 Review.user_id == user_id,
                 Review.book_id == book_id,
-                Review.is_deleted == False,  # noqa: E712
+                Review.deleted_at.is_(None),  # noqa: E712
             )
         )
         return result.scalars().first()
@@ -51,7 +51,7 @@ class ReviewRepository(BaseRepository[Review, ReviewCreate, ReviewUpdate]):
         result = await db.execute(
             select(func.avg(Review.rate)).where(
                 Review.book_id == book_id,
-                Review.is_deleted == False,  # noqa: E712
+                Review.deleted_at.is_(None),  # noqa: E712
             )
         )
         return result.scalar()

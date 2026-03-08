@@ -24,7 +24,7 @@ class Review(ReviewBase):
     book_id: Optional[int] = None
     user_id: Optional[int] = None
     create_at: Optional[datetime] = None
-    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

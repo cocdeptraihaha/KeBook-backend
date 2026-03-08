@@ -23,7 +23,7 @@ async def list_books(
     """List books with pagination (public - no auth required)."""
     stmt = (
         select(Book)
-        .where(Book.is_deleted == False)  # noqa: E712
+        .where(Book.deleted_at.is_(None))  # noqa: E712
         .order_by(Book.id)
     )
     if q:
@@ -44,7 +44,7 @@ async def get_book(
 ):
     """Book detail with nested book_detail (public)."""
     book = await book_service.repository.get_with_detail(db, book_id)
-    if not book or book.is_deleted:
+    if not book or book.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Book not found")
     return book
 

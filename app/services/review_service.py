@@ -41,7 +41,7 @@ class ReviewService:
         self, db: AsyncSession, review_id: int, user_id: int, review_in: ReviewUpdate
     ) -> Optional[Review]:
         review = await self.repository.get(db, review_id)
-        if not review or review.user_id != user_id or review.is_deleted:
+        if not review or review.user_id != user_id or review.deleted_at is not None:
             return None
         return await self.repository.update(db, review, review_in)
 
@@ -51,7 +51,6 @@ class ReviewService:
         review = await self.repository.get(db, review_id)
         if not review or review.user_id != user_id:
             return False
-        review.is_deleted = True
         review.deleted_at = datetime.utcnow()
         await db.flush()
         return True

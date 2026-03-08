@@ -13,7 +13,6 @@ class Service(Base):
     name_service = Column(String(255), nullable=True)
     price = Column(Float, nullable=True)
     status = Column(Boolean, nullable=True)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     orders = relationship("Order", back_populates="service")

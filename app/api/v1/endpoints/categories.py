@@ -34,7 +34,7 @@ async def get_category(
 ):
     """Chi tiết danh mục (public)."""
     cat = await category_repository.get(db, category_id)
-    if not cat or cat.is_deleted:
+    if not cat or cat.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Category not found")
     return cat
 

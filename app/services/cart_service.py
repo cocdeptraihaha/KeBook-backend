@@ -50,7 +50,7 @@ class CartService:
         self, db: AsyncSession, cart_id: int, user_id: int, quantity: int
     ) -> Cart | None:
         cart = await self.repository.get(db, cart_id)
-        if not cart or cart.user_id != user_id or cart.is_deleted:
+        if not cart or cart.user_id != user_id or cart.deleted_at is not None:
             return None
         cart.quantity = quantity
         cart.update_at = date.today()
@@ -65,7 +65,6 @@ class CartService:
         if not cart or cart.user_id != user_id:
             return False
         from datetime import datetime
-        cart.is_deleted = True
         cart.deleted_at = datetime.utcnow()
         await db.flush()
         return True

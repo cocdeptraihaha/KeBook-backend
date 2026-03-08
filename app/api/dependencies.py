@@ -14,32 +14,34 @@ settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 
+def _unauthorized(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ) -> User:
     """Get current user from JWT."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
         if user_id is None:
-            raise credentials_exception
+            raise _unauthorized("Invalid token: missing subject")
         user_id = int(user_id)
     except (JWTError, ValueError):
-        raise credentials_exception
+        raise _unauthorized("Invalid or expired token")
 
     user = await user_repository.get(db, user_id)
     if user is None:
-        raise credentials_exception
+        raise _unauthorized("User not found")
 
-    deleted_at = getattr(user, "deleted_at", None)
-    if deleted_at is not None:
-        raise credentials_exception
+    if getattr(user, "deleted_at", None) is not None:
+        raise _unauthorized("Account has been deleted")
     return user
 
 

@@ -1,6 +1,6 @@
 """Order model."""
 import enum
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum as SQLEnum, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -29,7 +29,6 @@ class Order(Base):
     payment_id = Column(Integer, ForeignKey("payment.id"), nullable=False)
     service_id = Column(Integer, ForeignKey("service.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     payment = relationship("Payment", back_populates="orders")

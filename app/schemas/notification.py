@@ -21,7 +21,7 @@ class NotificationSendRequest(NotificationBase):
 class Notification(NotificationBase):
     id: int
     send_date: Optional[datetime] = None
-    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

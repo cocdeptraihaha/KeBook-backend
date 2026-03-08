@@ -28,7 +28,6 @@ class PromotionUpdate(BaseModel):
 
 class Promotion(PromotionBase):
     id: int
-    is_deleted: bool = False
     deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

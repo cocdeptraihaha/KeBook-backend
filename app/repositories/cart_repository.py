@@ -24,7 +24,7 @@ class CartRepository(BaseRepository[Cart, CartCreate, CartUpdate]):
             select(Cart)
             .where(
                 Cart.user_id == user_id,
-                Cart.is_deleted == False,  # noqa: E712
+                Cart.deleted_at.is_(None),  # noqa: E712
             )
             .options(selectinload(Cart.book))
             .offset(skip)
@@ -40,7 +40,7 @@ class CartRepository(BaseRepository[Cart, CartCreate, CartUpdate]):
             select(Cart).where(
                 Cart.user_id == user_id,
                 Cart.book_id == book_id,
-                Cart.is_deleted == False,  # noqa: E712
+                Cart.deleted_at.is_(None),  # noqa: E712
             )
         )
         return result.scalars().first()

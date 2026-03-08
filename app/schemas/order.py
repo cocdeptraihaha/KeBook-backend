@@ -17,7 +17,7 @@ class OrderItemCreate(OrderItemBase):
 class OrderItem(OrderItemBase):
     id: int
     order_id: Optional[int] = None
-    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -61,7 +61,6 @@ class Order(OrderBase):
     status: Optional[str] = None
     total_price: Optional[float] = None
     user_id: int = 0
-    is_deleted: bool = False
     deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

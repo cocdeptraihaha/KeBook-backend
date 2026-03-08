@@ -1,5 +1,5 @@
 """Promotion model."""
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -16,7 +16,6 @@ class Promotion(Base):
     max_discount = Column(Float, nullable=True)
     name = Column(String(255), nullable=True)
     start_date = Column(DateTime, nullable=True)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     order_promotions = relationship("OrderPromotion", back_populates="promotion")

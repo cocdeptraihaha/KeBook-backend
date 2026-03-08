@@ -21,7 +21,7 @@ class NotificationRepository(BaseRepository[Notification, NotificationCreate, No
     ) -> List[Notification]:
         result = await db.execute(
             select(Notification)
-            .where(Notification.is_deleted == False)  # noqa: E712
+            .where(Notification.deleted_at.is_(None))  # noqa: E712
             .offset(skip)
             .limit(limit)
         )

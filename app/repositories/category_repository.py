@@ -20,7 +20,7 @@ class CategoryRepository(BaseRepository[Category, CategoryCreate, CategoryUpdate
         """Lấy danh sách category chưa xóa."""
         result = await db.execute(
             select(Category)
-            .where(Category.is_deleted == False)  # noqa: E712
+            .where(Category.deleted_at.is_(None))  # noqa: E712
             .offset(skip)
             .limit(limit)
         )
@@ -31,7 +31,7 @@ class CategoryRepository(BaseRepository[Category, CategoryCreate, CategoryUpdate
         result = await db.execute(
             select(Category).where(
                 Category.parent_id.is_(None),
-                Category.is_deleted == False,  # noqa: E712
+                Category.deleted_at.is_(None),  # noqa: E712
             )
         )
         return list(result.scalars().all())

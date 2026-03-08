@@ -33,7 +33,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             select(Order)
             .where(
                 Order.user_id == user_id,
-                Order.is_deleted == False,  # noqa: E712
+                Order.deleted_at.is_(None),  # noqa: E712
             )
             .order_by(Order.order_date.desc())
             .offset(skip)

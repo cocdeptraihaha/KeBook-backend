@@ -29,7 +29,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         """Lấy danh sách book chưa xóa."""
         result = await db.execute(
             select(Book)
-            .where(Book.is_deleted == False)  # noqa: E712
+            .where(Book.deleted_at.is_(None))
             .offset(skip)
             .limit(limit)
         )
@@ -43,7 +43,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         limit: int = 100,
     ) -> List[Book]:
         """Tìm sách theo title, author."""
-        stmt = select(Book).where(Book.is_deleted == False)  # noqa: E712
+        stmt = select(Book).where(Book.deleted_at.is_(None))
         if q:
             stmt = stmt.where(
                 (Book.title.like(f"%{q}%")) | (Book.author.like(f"%{q}%"))

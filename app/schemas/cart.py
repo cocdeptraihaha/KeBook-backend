@@ -28,7 +28,6 @@ class Cart(CartBase):
     id: int
     create_at: Optional[date] = None
     update_at: Optional[date] = None
-    is_deleted: bool = False
     deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

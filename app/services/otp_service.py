@@ -26,11 +26,12 @@ class OTPService:
         return result.rowcount
 
     async def cleanup_expired_otps_and_inactive_users(
-        self, db: AsyncSession
+        self, db: AsyncSession, exclude_email: str | None = None
     ) -> tuple[int, int]:
         """
         - Delete inactive users only when ALL their activation OTPs are expired
         - Delete ALL expired OTPs (ACTIVATION + RESET_PASSWORD / forgot-password)
+        - exclude_email: không xóa user có email này (đang trong flow gửi OTP mới)
         Returns (users_deleted, otps_deleted).
         """
         now = datetime.utcnow()
@@ -43,6 +44,8 @@ class OTPService:
         emails_with_expired = [row[0] for row in result.fetchall()]
         users_deleted = 0
         for email in emails_with_expired:
+            if exclude_email and email == exclude_email:
+                continue  # Đang gửi OTP cho email này, không xóa user
             # Only delete if user has NO valid activation OTP (all expired or used)
             has_valid = await db.execute(
                 select(OTP.id).where(
@@ -76,8 +79,8 @@ class OTPService:
         otp_type: OTPType,
     ) -> str:
         """Tạo OTP, lưu vào DB và gửi email."""
-        # Xóa user chưa kích hoạt có OTP hết hạn + xóa OTP hết hạn trước khi tạo mới
-        await self.cleanup_expired_otps_and_inactive_users(db)
+        # Xóa user chưa kích hoạt có OTP hết hạn + xóa OTP hết hạn; không xóa user đang gửi OTP
+        await self.cleanup_expired_otps_and_inactive_users(db, exclude_email=email)
 
         # Tạo OTP mới
         otp_code = self.generate_otp()

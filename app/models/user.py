@@ -18,8 +18,7 @@ class User(Base):
     date_of_birth = Column(DateTime, nullable=True)
     gender = Column(String(255), nullable=True)
     phone_number = Column(String(255), nullable=True)
-    # Soft delete: dùng deleted_at, is_deleted là property tính từ deleted_at
-    deleted_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)  # soft delete
     # Auth
     email = Column(String(255), unique=True, index=True, nullable=True)
     username = Column(String(255), unique=True, index=True, nullable=True)
@@ -33,8 +32,3 @@ class User(Base):
     cart_items = relationship("Cart", back_populates="user", foreign_keys="Cart.user_id")
     orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id")
     reviews = relationship("Review", back_populates="user", foreign_keys="Review.user_id")
-
-    @property
-    def is_deleted(self) -> bool:
-        """Soft delete flag dựa trên deleted_at."""
-        return self.deleted_at is not None

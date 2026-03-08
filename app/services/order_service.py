@@ -36,7 +36,7 @@ class OrderService:
         db.add(payment)
         await db.flush()
 
-        result = await db.execute(select(Service).where(Service.is_deleted == False).limit(1))
+        result = await db.execute(select(Service).where(Service.deleted_at.is_(None)).limit(1))
         service = result.scalars().first()
         if not service:
             service = Service(name_service="Standard delivery", price=0, status=True)
@@ -98,7 +98,7 @@ class OrderService:
         order_items_data = []
         for item in cart_items:
             book = await db.get(Book, item.book_id)
-            if not book or book.is_deleted:
+            if not book or book.deleted_at is not None:
                 raise ValueError(f"Book id={item.book_id} not found")
             price = book.selling_price or 0
             qty = item.quantity or 1
@@ -132,7 +132,7 @@ class OrderService:
 
         # Lấy service
         result = await db.execute(
-            select(Service).where(Service.is_deleted == False).limit(1)
+            select(Service).where(Service.deleted_at.is_(None)).limit(1)
         )
         service = result.scalars().first()
         if not service:
@@ -175,7 +175,6 @@ class OrderService:
 
         # Soft delete cart items
         for item in cart_items:
-            item.is_deleted = True
             item.deleted_at = datetime.utcnow()
 
         await db.flush()

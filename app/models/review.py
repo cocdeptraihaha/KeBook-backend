@@ -1,5 +1,5 @@
 """Review model - đánh giá sách."""
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -15,7 +15,6 @@ class Review(Base):
     rate = Column(Integer, nullable=True)
     book_id = Column(Integer, ForeignKey("books.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
 
     book = relationship("Book", back_populates="reviews")
