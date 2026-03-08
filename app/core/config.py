@@ -24,11 +24,6 @@ class Settings(BaseSettings):
     OTP_EXPIRE_SECONDS: int = 90  # OTP hết hạn sau 90 giây
     OTP_LENGTH: int = 6  # Độ dài OTP (6 số)
 
-    # SePay
-    SEPAY_MERCHANT_ID: str = ""
-    SEPAY_SECRET_KEY: str = ""
-    SEPAY_CHECKOUT_URL: str = "https://pay-sandbox.sepay.vn/v1/checkout/init"
-
     class Config:
         env_file = ".env"
 

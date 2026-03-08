@@ -81,8 +81,6 @@ cp .env.example .env    # Linux/macOS
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
 - API: `http://localhost:8000`  
 - Swagger UI: `http://localhost:8000/docs`  
 - ReDoc: `http://localhost:8000/redoc`  
@@ -214,7 +212,6 @@ app/
 │           ├── return_requests.py
 │           ├── notifications.py
 │           ├── support_requests.py
-│           ├── payments.py   # SePay
 │           └── test_utils.py # Test-only (OTP, make-admin)
 ├── core/
 │   ├── config.py            # Settings từ .env
