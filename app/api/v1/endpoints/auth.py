@@ -1,4 +1,5 @@
-"""Auth endpoints: login, register với OTP, forgot password."""
+"""Auth endpoints: login, register with OTP, forgot password."""
+import logging
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 from app.core.database import get_db
 from app.core.security import create_access_token, verify_password, get_password_hash
 from app.models.otp import OTPType
@@ -19,14 +22,14 @@ settings = get_settings()
 
 
 class TokenResponse(BaseModel):
-    """Response khi login thành công."""
+    """Response when login successful."""
     access_token: str
     token_type: str = "bearer"
     user: UserSchema
 
 
 class RegisterResponse(BaseModel):
-    """Response khi register thành công."""
+    """Response when register successful."""
     message: str
     email: str
 
@@ -38,7 +41,7 @@ class VerifyOTPRequest(BaseModel):
 
 
 class ResendOTPRequest(BaseModel):
-    """Request gửi lại OTP kích hoạt."""
+    """Request resend activation OTP."""
     email: EmailStr
 
 
@@ -59,26 +62,27 @@ async def register(
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Đăng ký user mới, gửi OTP qua email để kích hoạt."""
     try:
-        # Tạo user với is_active=False
         user = await user_service.create_user(db, user_in)
-        
-        # Tạo và gửi OTP activation
+
         await otp_service.create_and_send_otp(
             db,
             user.email,
             OTPType.ACTIVATION,
         )
         await db.commit()
-        
+
         return RegisterResponse(
-            message="Đăng ký thành công! Vui lòng kiểm tra email để lấy mã OTP kích hoạt tài khoản.",
+            message="Registration successful. Please check your email for the OTP activation code.",
             email=user.email,
         )
     except ValueError as e:
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        logger.exception("register error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/verify-otp", response_model=TokenResponse)
@@ -86,41 +90,45 @@ async def verify_otp(
     request: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Verify OTP để kích hoạt tài khoản."""
-    is_valid, otp = await otp_service.verify_otp(
-        db,
-        request.email,
-        request.otp_code,
-        OTPType.ACTIVATION,
-    )
+    """Verify OTP to activate account."""
+    try:
+        is_valid, otp = await otp_service.verify_otp(
+            db,
+            request.email,
+            request.otp_code,
+            OTPType.ACTIVATION,
+        )
 
-    if not is_valid:
-        if otp and otp.is_expired():
-            raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn")
-        raise HTTPException(status_code=400, detail="Mã OTP không hợp lệ")
+        if not is_valid:
+            if otp and otp.is_expired():
+                raise HTTPException(status_code=400, detail="OTP code has expired")
+            raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    # Activate user
-    user = await user_service.repository.get_by_email(db, request.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+        # Activate user
+        user = await user_service.repository.get_by_email(db, request.email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    user.is_active = True
-    await db.flush()
+        user.is_active = True
+        await db.flush()
 
-    # Tạo token sau khi activate (get_db sẽ commit khi request hoàn thành)
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=access_token_expires,
-    )
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": str(user.id)},
+            expires_delta=access_token_expires,
+        )
 
-    # Chuyển sang schema trước khi trả về để tránh lỗi serialize ORM
-    user_schema = UserSchema.model_validate(user)
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=user_schema,
-    )
+        user_schema = UserSchema.model_validate(user)
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=user_schema,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("verify_otp error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/resend-otp")
@@ -128,13 +136,14 @@ async def resend_otp(
     request: ResendOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Gửi lại OTP kích hoạt cho user chưa active."""
+    """Resend activation OTP. Only sends if email exists and user is inactive."""
     user = await user_service.repository.get_by_email(db, request.email)
-    if not user or user.is_active or getattr(user, "is_deleted", False):
-        # Không tiết lộ email có tồn tại hay không (bảo mật)
-        return {
-            "message": "Nếu email tồn tại và chưa kích hoạt, chúng tôi đã gửi mã OTP mới đến email của bạn."
-        }
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not found")
+    if user.is_active:
+        raise HTTPException(status_code=400, detail="Account already activated")
+    if getattr(user, "is_deleted", False):
+        raise HTTPException(status_code=404, detail="Account not found")
 
     await otp_service.create_and_send_otp(
         db,
@@ -144,7 +153,7 @@ async def resend_otp(
     await db.commit()
 
     return {
-        "message": "Đã gửi mã OTP mới. Vui lòng kiểm tra email để kích hoạt tài khoản."
+        "message": "New OTP sent. Please check your email to activate your account."
     }
 
 
@@ -153,16 +162,11 @@ async def forgot_password(
     request: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Gửi OTP để reset password."""
-    # Kiểm tra email có tồn tại không
+    """Send OTP to reset password. Only sends if email exists in DB."""
     user = await user_service.repository.get_by_email(db, request.email)
     if not user:
-        # Không tiết lộ email có tồn tại hay không (bảo mật)
-        return {
-            "message": "Nếu email tồn tại, chúng tôi đã gửi mã OTP đến email của bạn."
-        }
+        raise HTTPException(status_code=404, detail="Email not found")
 
-    # Tạo và gửi OTP reset password
     await otp_service.create_and_send_otp(
         db,
         request.email,
@@ -171,7 +175,7 @@ async def forgot_password(
     await db.commit()
 
     return {
-        "message": "Nếu email tồn tại, chúng tôi đã gửi mã OTP đến email của bạn."
+        "message": "OTP has been sent to your email."
     }
 
 
@@ -180,7 +184,7 @@ async def reset_password(
     request: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Reset password với OTP."""
+    """Reset password with OTP."""
     # Verify OTP
     is_valid, otp = await otp_service.verify_otp(
         db,
@@ -191,19 +195,19 @@ async def reset_password(
 
     if not is_valid:
         if otp and otp.is_expired():
-            raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn")
-        raise HTTPException(status_code=400, detail="Mã OTP không hợp lệ")
+            raise HTTPException(status_code=400, detail="OTP code has expired")
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    # Lấy user
+    # Get user
     user = await user_service.repository.get_by_email(db, request.email)
     if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+        raise HTTPException(status_code=404, detail="User not found")
 
     # Update password
     user.hashed_password = get_password_hash(request.new_password)
     await db.commit()
 
-    return {"message": "Đổi mật khẩu thành công! Vui lòng đăng nhập lại."}
+    return {"message": "Password changed successfully. Please log in again."}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -211,18 +215,18 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    """Đăng nhập với JWT (email hoặc username + password)."""
+    """Login with JWT (email or username + password)."""
     user = await user_service.repository.get_by_email_or_username(db, form_data.username)
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email/username hoặc mật khẩu không đúng",
+            detail="Invalid email/username or password",
         )
     
     if not user.is_active:
         raise HTTPException(
             status_code=400,
-            detail="Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email để lấy mã OTP.",
+            detail="Account not activated. Please check your email for the OTP code.",
         )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

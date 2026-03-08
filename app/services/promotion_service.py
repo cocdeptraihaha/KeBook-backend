@@ -21,7 +21,7 @@ class PromotionService:
         """
         promo = await self.repository.get_by_code(db, code)
         if not promo:
-            return None, 0, "Mã khuyến mãi không hợp lệ hoặc đã hết hạn"
+            return None, 0, "Invalid or expired promotion code"
         discount = 0
         if promo.discount_percent:
             discount = order_total * (promo.discount_percent / 100)

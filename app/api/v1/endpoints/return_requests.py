@@ -18,7 +18,7 @@ async def get_my_return_requests(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Lấy yêu cầu trả hàng của user."""
+    """Get return requests of user."""
     return await return_request_service.get_by_user(
         db, current_user.id, skip, limit
     )
@@ -30,7 +30,7 @@ async def create_return_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Tạo yêu cầu trả hàng."""
+    """Create return request."""
     try:
         return await return_request_service.create(db, req_in, current_user.id)
     except ValueError as e:
@@ -44,10 +44,10 @@ async def process_return_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Admin duyệt/từ chối yêu cầu trả hàng."""
+    """Admin approve/reject return request."""
     req = await return_request_service.process(
         db, req_id, body.status, current_user.id
     )
     if not req:
-        raise HTTPException(status_code=404, detail="Không tìm thấy hoặc đã xử lý")
+        raise HTTPException(status_code=404, detail="Not found or already processed")
     return req

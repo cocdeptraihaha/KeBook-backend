@@ -1,6 +1,15 @@
 """Application entry point."""
 import asyncio
+import sys
 from contextlib import asynccontextmanager
+
+# Fix Windows console: UTF-8 cho Vietnamese
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -26,13 +35,13 @@ async def _periodic_otp_cleanup(stopped: asyncio.Event):
                 await session.commit()
                 if users_n > 0 or otps_n > 0:
                     if users_n > 0:
-                        print(f"[OTP] Đã xóa {users_n} user chưa kích hoạt (OTP hết hạn).")
+                        print(f"[OTP] Deleted {users_n} inactive users (OTP expired).")
                     if otps_n > 0:
-                        print(f"[OTP] Đã xóa {otps_n} mã OTP hết hạn.")
+                        print(f"[OTP] Deleted {otps_n} expired OTP codes.")
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"[OTP] Lỗi khi dọn OTP/user hết hạn: {e}")
+            print(f"[OTP] Error cleaning OTP/users: {e}")
         await asyncio.sleep(OTP_CLEANUP_INTERVAL)
 
 

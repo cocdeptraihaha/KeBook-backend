@@ -14,11 +14,11 @@ router = APIRouter()
 
 @router.get("/validate")
 async def validate_promotion(
-    code: str = Query(..., description="Mã khuyến mãi"),
-    order_total: float = Query(0, ge=0, description="Tổng tiền đơn hàng"),
+    code: str = Query(..., description="Promotion code"),
+    order_total: float = Query(0, ge=0, description="Order total amount"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Kiểm tra mã khuyến mãi (public - dùng khi checkout)."""
+    """Validate promotion code (public - use at checkout)."""
     promo, discount, err = await promotion_service.validate_code(
         db, code, order_total
     )
@@ -39,7 +39,7 @@ async def list_promotions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Danh sách mã khuyến mãi (admin)."""
+    """List promotions (admin)."""
     return await promotion_service.get_multi_active(db, skip, limit)
 
 
@@ -49,7 +49,7 @@ async def create_promotion(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Tạo mã khuyến mãi (admin)."""
+    """Create promotion (admin)."""
     if promo_in.code:
         promo_in.code = promo_in.code.strip().upper()
     return await promotion_repository.create(db, promo_in)
@@ -62,8 +62,8 @@ async def update_promotion(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Cập nhật mã khuyến mãi (admin)."""
+    """Update promotion (admin)."""
     promo = await promotion_repository.get(db, promo_id)
     if not promo:
-        raise HTTPException(status_code=404, detail="Không tìm thấy")
+        raise HTTPException(status_code=404, detail="Promotion not found")
     return await promotion_repository.update(db, promo, promo_in)

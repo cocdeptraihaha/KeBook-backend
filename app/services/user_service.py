@@ -18,11 +18,11 @@ class UserService:
         """Tạo user mới (hash password)."""
         existing_email = await self.repository.get_by_email(db, user_in.email)
         if existing_email:
-            raise ValueError("Email đã được đăng ký")
+            raise ValueError("Email already registered")
 
         existing_username = await self.repository.get_by_username(db, user_in.username)
         if existing_username:
-            raise ValueError("Username đã được sử dụng")
+            raise ValueError("Username already in use")
 
         data = user_in.model_dump()
         password = data.pop("password")

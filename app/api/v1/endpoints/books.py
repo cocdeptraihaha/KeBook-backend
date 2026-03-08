@@ -17,10 +17,10 @@ router = APIRouter()
 
 @router.get("/", response_model=Page[BookSchema])
 async def list_books(
-    q: str | None = Query(None, description="Tìm theo title, author"),
+    q: str | None = Query(None, description="Search by title, author"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Danh sách sách có phân trang (public - không cần auth)."""
+    """List books with pagination (public - no auth required)."""
     stmt = (
         select(Book)
         .where(Book.is_deleted == False)  # noqa: E712
@@ -42,10 +42,10 @@ async def get_book(
     book_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Chi tiết sách (public)."""
+    """Book detail (public)."""
     book = await book_service.repository.get_with_detail(db, book_id)
     if not book or book.is_deleted:
-        raise HTTPException(status_code=404, detail="Không tìm thấy sách")
+        raise HTTPException(status_code=404, detail="Book not found")
     return book
 
 
@@ -55,7 +55,7 @@ async def create_book(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Tạo sách mới (chỉ admin)."""
+    """Create new book (admin only)."""
     book = await book_service.create_book(db, book_in)
     return book
 
@@ -67,9 +67,9 @@ async def update_book(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Cập nhật sách (chỉ admin)."""
+    """Update book (admin only)."""
     book = await book_service.repository.get(db, book_id)
     if not book:
-        raise HTTPException(status_code=404, detail="Không tìm thấy sách")
+        raise HTTPException(status_code=404, detail="Book not found")
     book = await book_service.repository.update(db, book, book_in)
     return book

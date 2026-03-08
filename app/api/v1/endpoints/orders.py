@@ -18,7 +18,7 @@ async def get_my_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Lấy đơn hàng của user đăng nhập."""
+    """Get orders of logged-in user."""
     return await order_service.get_user_orders(db, current_user.id, skip, limit)
 
 
@@ -31,7 +31,7 @@ async def get_order(
     """Chi tiết đơn hàng (chỉ của chính mình)."""
     order = await order_service.get_order(db, order_id, current_user.id)
     if not order:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng")
+        raise HTTPException(status_code=404, detail="Order not found")
     return order
 
 
@@ -41,7 +41,7 @@ async def checkout_from_cart(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Checkout từ giỏ hàng - tạo đơn hàng từ cart."""
+    """Checkout from cart - create order from cart."""
     try:
         return await order_service.checkout_from_cart(
             db, current_user.id, checkout_in
@@ -57,12 +57,12 @@ async def update_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Cập nhật trạng thái đơn (admin)."""
+    """Update order status (admin)."""
     order = await order_service.update_status(
         db, order_id, body.status, current_user.id
     )
     if not order:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng")
+        raise HTTPException(status_code=404, detail="Order not found")
     return order
 
 
@@ -72,5 +72,5 @@ async def create_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Tạo đơn hàng mới (gửi items thủ công)."""
+    """Create new order (send items manually)."""
     return await order_service.create_order(db, order_in, current_user.id)

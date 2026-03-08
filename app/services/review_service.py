@@ -22,7 +22,7 @@ class ReviewService:
             db, user_id, review_in.book_id
         )
         if existing:
-            raise ValueError("Bạn đã đánh giá sách này rồi")
+            raise ValueError("You have already reviewed this book")
         data = review_in.model_dump()
         data["user_id"] = user_id
         data["create_at"] = datetime.utcnow()

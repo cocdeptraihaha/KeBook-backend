@@ -18,7 +18,7 @@ async def list_reviews_by_book(
     limit: int = Query(100, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """Danh sách đánh giá theo sách (public)."""
+    """List reviews by book (public)."""
     return await review_service.get_by_book(db, book_id, skip, limit)
 
 
@@ -27,7 +27,7 @@ async def get_book_avg_rate(
     book_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Điểm trung bình của sách (public)."""
+    """Average rating of book (public)."""
     avg = await review_service.get_avg_rate(db, book_id)
     return {"book_id": book_id, "avg_rate": round(float(avg), 2) if avg else None}
 
@@ -38,7 +38,7 @@ async def create_review(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Tạo đánh giá (user đã mua mới đánh giá - kiểm tra sau)."""
+    """Create review (user must have purchased to review)."""
     try:
         return await review_service.create_review(db, review_in, current_user.id)
     except ValueError as e:
@@ -52,12 +52,12 @@ async def update_review(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Cập nhật đánh giá (chỉ của chính mình)."""
+    """Update review (own reviews only)."""
     review = await review_service.update_review(
         db, review_id, current_user.id, review_in
     )
     if not review:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đánh giá")
+        raise HTTPException(status_code=404, detail="Review not found")
     return review
 
 
@@ -67,7 +67,7 @@ async def delete_review(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Xóa đánh giá (chỉ của chính mình)."""
+    """Delete review (own reviews only)."""
     ok = await review_service.delete_review(db, review_id, current_user.id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đánh giá")
+        raise HTTPException(status_code=404, detail="Review not found")

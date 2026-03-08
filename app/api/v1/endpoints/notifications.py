@@ -19,7 +19,7 @@ async def get_my_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Lấy thông báo của user đăng nhập."""
+    """Get notifications of logged-in user."""
     return await notification_service.get_user_notifications(
         db, current_user.id, skip, limit
     )
@@ -31,13 +31,13 @@ async def mark_notification_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Đánh dấu đã đọc."""
+    """Mark as read."""
     ok = await notification_service.mark_read(
         db, notification_id, current_user.id
     )
     if not ok:
-        raise HTTPException(status_code=404, detail="Không tìm thấy thông báo")
-    return {"message": "Đã đánh dấu đọc"}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Marked as read"}
 
 
 @router.get("/", response_model=list[Notification])
@@ -47,7 +47,7 @@ async def list_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Danh sách thông báo (admin)."""
+    """List notifications (admin)."""
     return await notification_repository.get_multi_active(db, skip, limit)
 
 
@@ -57,9 +57,9 @@ async def create_notification(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Tạo thông báo và gửi cho user_ids (admin)."""
+    """Create notification and send to user_ids (admin)."""
     if not body.user_ids:
-        raise HTTPException(status_code=400, detail="Cần có ít nhất 1 user_id")
+        raise HTTPException(status_code=400, detail="At least 1 user_id is required")
     return await notification_service.create_and_send_to_users(
         db,
         body.user_ids,

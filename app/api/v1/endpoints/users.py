@@ -16,7 +16,7 @@ async def create_user(
     user_in: UserCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Đăng ký user mới."""
+    """Register new user."""
     try:
         user = await user_service.create_user(db, user_in)
         return user
@@ -26,7 +26,7 @@ async def create_user(
 
 @router.get("/me", response_model=UserSchema)
 async def read_current_user(current_user: User = Depends(get_current_user)):
-    """Lấy thông tin user đang đăng nhập."""
+    """Get logged-in user info."""
     return current_user
 
 
@@ -36,10 +36,10 @@ async def read_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lấy user theo ID."""
+    """Get user by ID."""
     user = await user_service.repository.get(db, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+        raise HTTPException(status_code=404, detail="User not found")
     return user
 
 
@@ -50,12 +50,12 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Cập nhật user (chỉ cho chính mình)."""
+    """Update user (own profile only)."""
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Không có quyền")
+        raise HTTPException(status_code=403, detail="Permission denied")
     user = await user_service.update_user(db, user_id, user_in)
     if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+        raise HTTPException(status_code=404, detail="User not found")
     return user
 
 
@@ -65,9 +65,9 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Xóa user (chỉ cho chính mình)."""
+    """Delete user (own account only)."""
     if current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Không có quyền")
+        raise HTTPException(status_code=403, detail="Permission denied")
     deleted = await user_service.repository.delete(db, user_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+        raise HTTPException(status_code=404, detail="User not found")

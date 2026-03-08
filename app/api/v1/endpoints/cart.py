@@ -18,7 +18,7 @@ async def get_my_cart(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Lấy giỏ hàng của user đăng nhập."""
+    """Get cart of logged-in user."""
     return await cart_service.get_user_cart(db, current_user.id, skip, limit)
 
 
@@ -28,7 +28,7 @@ async def add_to_cart(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Thêm sách vào giỏ hàng."""
+    """Add book to cart."""
     return await cart_service.add_to_cart(db, current_user.id, cart_in)
 
 
@@ -39,14 +39,14 @@ async def update_cart_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Cập nhật số lượng trong giỏ."""
+    """Update quantity in cart."""
     if cart_in.quantity is None:
-        raise HTTPException(status_code=400, detail="Cần có quantity")
+        raise HTTPException(status_code=400, detail="Quantity is required")
     cart = await cart_service.update_quantity(
         db, cart_id, current_user.id, cart_in.quantity
     )
     if not cart:
-        raise HTTPException(status_code=404, detail="Không tìm thấy item")
+        raise HTTPException(status_code=404, detail="Item not found")
     return cart
 
 
@@ -56,7 +56,7 @@ async def remove_from_cart(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Xóa item khỏi giỏ hàng."""
+    """Remove item from cart."""
     ok = await cart_service.remove_from_cart(db, cart_id, current_user.id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Không tìm thấy item")
+        raise HTTPException(status_code=404, detail="Item not found")

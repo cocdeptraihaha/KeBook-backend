@@ -39,7 +39,7 @@ class OrderService:
         result = await db.execute(select(Service).where(Service.is_deleted == False).limit(1))
         service = result.scalars().first()
         if not service:
-            service = Service(name_service="Giao hàng tiêu chuẩn", price=0, status=True)
+            service = Service(name_service="Standard delivery", price=0, status=True)
             db.add(service)
             await db.flush()
 
@@ -91,7 +91,7 @@ class OrderService:
         """Tạo đơn hàng từ giỏ hàng."""
         cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
         if not cart_items:
-            raise ValueError("Giỏ hàng trống")
+            raise ValueError("Cart is empty")
 
         # Lấy giá sách, tính tổng, kiểm tra tồn kho
         subtotal = 0.0
@@ -99,11 +99,11 @@ class OrderService:
         for item in cart_items:
             book = await db.get(Book, item.book_id)
             if not book or book.is_deleted:
-                raise ValueError(f"Sách id={item.book_id} không tồn tại")
+                raise ValueError(f"Book id={item.book_id} not found")
             price = book.selling_price or 0
             qty = item.quantity or 1
             if (book.stock_quantity or 0) < qty:
-                raise ValueError(f"Sách '{book.title}' không đủ tồn kho")
+                raise ValueError(f"Book '{book.title}' insufficient stock")
             subtotal += price * qty
             order_items_data.append((item.book_id, qty, price))
 
@@ -136,7 +136,7 @@ class OrderService:
         )
         service = result.scalars().first()
         if not service:
-            service = Service(name_service="Giao hàng tiêu chuẩn", price=0, status=True)
+            service = Service(name_service="Standard delivery", price=0, status=True)
             db.add(service)
             await db.flush()
 

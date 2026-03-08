@@ -18,10 +18,10 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ) -> User:
-    """Lấy user hiện tại từ JWT."""
+    """Get current user from JWT."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Không xác thực được thông tin đăng nhập",
+        detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -42,11 +42,11 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Đảm bảo user đã active."""
+    """Ensure user is active."""
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tài khoản chưa được kích hoạt.",
+            detail="Account not activated.",
         )
     return current_user
 
@@ -54,10 +54,10 @@ async def get_current_active_user(
 async def get_current_superuser(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Đảm bảo user là superuser (admin)."""
+    """Ensure user is superuser (admin)."""
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Không đủ quyền truy cập.",
+            detail="Insufficient permissions.",
         )
     return current_user

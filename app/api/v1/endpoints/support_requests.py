@@ -17,7 +17,7 @@ async def create_support_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """User gửi yêu cầu hỗ trợ."""
+    """User submit support request."""
     from app.models.support_request import SupportRequest as SRModel
     from datetime import datetime
     req = SRModel(
@@ -41,7 +41,7 @@ async def list_support_requests(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Danh sách yêu cầu hỗ trợ (admin)."""
+    """List support requests (admin)."""
     return await support_request_repository.get_multi(db, skip, limit)
 
 
@@ -56,7 +56,7 @@ async def update_support_request(
     from datetime import datetime
     req = await support_request_repository.get(db, req_id)
     if not req:
-        raise HTTPException(status_code=404, detail="Không tìm thấy")
+        raise HTTPException(status_code=404, detail="Not found")
     if req_in.staff_response is not None:
         req.staff_response = req_in.staff_response
         req.staff_id = current_user.id

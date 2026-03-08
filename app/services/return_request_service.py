@@ -24,15 +24,15 @@ class ReturnRequestService:
         # Kiểm tra order thuộc user
         order = await db.get(Order, req_in.order_id)
         if not order or order.user_id != user_id:
-            raise ValueError("Đơn hàng không tồn tại hoặc không thuộc về bạn")
+            raise ValueError("Order not found or does not belong to you")
         if order.status not in ("COMPLETED", "DELIVERED"):
-            raise ValueError("Chỉ có thể yêu cầu trả hàng khi đơn đã giao")
+            raise ValueError("Return request only allowed when order is delivered")
 
         order_item = await db.get(OrderItem, req_in.order_item_id)
         if not order_item or order_item.order_id != req_in.order_id:
-            raise ValueError("Sản phẩm không thuộc đơn hàng")
+            raise ValueError("Product does not belong to order")
         if req_in.quantity > (order_item.quantity or 0):
-            raise ValueError("Số lượng trả vượt quá số lượng đã mua")
+            raise ValueError("Return quantity exceeds purchased quantity")
 
         data = req_in.model_dump()
         data["request_date"] = datetime.utcnow()
