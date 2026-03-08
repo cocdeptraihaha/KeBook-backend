@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from typing import Optional, TYPE_CHECKING
-from datetime import date, datetime
+from datetime import date
 
 if TYPE_CHECKING:
     from app.schemas.book import Book
@@ -28,7 +28,6 @@ class Cart(CartBase):
     id: int
     create_at: Optional[date] = None
     update_at: Optional[date] = None
-    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

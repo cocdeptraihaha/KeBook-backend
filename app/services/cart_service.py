@@ -50,7 +50,7 @@ class CartService:
         self, db: AsyncSession, cart_id: int, user_id: int, quantity: int
     ) -> Cart | None:
         cart = await self.repository.get(db, cart_id)
-        if not cart or cart.user_id != user_id or cart.deleted_at is not None:
+        if not cart or cart.user_id != user_id:
             return None
         cart.quantity = quantity
         cart.update_at = date.today()
@@ -61,11 +61,11 @@ class CartService:
     async def remove_from_cart(
         self, db: AsyncSession, cart_id: int, user_id: int
     ) -> bool:
+        """Xóa item khỏi giỏ (hard delete)."""
         cart = await self.repository.get(db, cart_id)
         if not cart or cart.user_id != user_id:
             return False
-        from datetime import datetime
-        cart.deleted_at = datetime.utcnow()
+        await db.delete(cart)
         await db.flush()
         return True
 

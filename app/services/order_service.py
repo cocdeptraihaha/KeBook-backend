@@ -173,9 +173,9 @@ class OrderService:
             )
             db.add(op)
 
-        # Soft delete cart items
+        # Hard delete cart items (đã chuyển sang order)
         for item in cart_items:
-            item.deleted_at = datetime.utcnow()
+            await db.delete(item)
 
         await db.flush()
         await db.refresh(order)

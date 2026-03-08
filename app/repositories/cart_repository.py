@@ -22,10 +22,7 @@ class CartRepository(BaseRepository[Cart, CartCreate, CartUpdate]):
         """Lấy giỏ hàng của user (chưa xóa)."""
         result = await db.execute(
             select(Cart)
-            .where(
-                Cart.user_id == user_id,
-                Cart.deleted_at.is_(None),  # noqa: E712
-            )
+            .where(Cart.user_id == user_id)
             .options(selectinload(Cart.book))
             .offset(skip)
             .limit(limit)
@@ -40,7 +37,6 @@ class CartRepository(BaseRepository[Cart, CartCreate, CartUpdate]):
             select(Cart).where(
                 Cart.user_id == user_id,
                 Cart.book_id == book_id,
-                Cart.deleted_at.is_(None),  # noqa: E712
             )
         )
         return result.scalars().first()
