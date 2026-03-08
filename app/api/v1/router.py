@@ -13,7 +13,6 @@ from app.api.v1.endpoints import (
     return_requests,
     notifications,
     support_requests,
-    payments,
     test_utils,
 )
 
@@ -30,5 +29,4 @@ api_router.include_router(promotions.router, prefix="/promotions", tags=["promot
 api_router.include_router(return_requests.router, prefix="/return-requests", tags=["return-requests"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(support_requests.router, prefix="/support-requests", tags=["support-requests"])
-api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(test_utils.router, prefix="/test", tags=["test"])
