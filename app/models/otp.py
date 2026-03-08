@@ -19,7 +19,7 @@ class OTP(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), index=True, nullable=False)
     code = Column(String(6), nullable=False)  # 6 số
-    otp_type = Column(SQLEnum(OTPType), nullable=False)
+    otp_type = Column(SQLEnum(OTPType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     is_used = Column(Boolean, default=False)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
