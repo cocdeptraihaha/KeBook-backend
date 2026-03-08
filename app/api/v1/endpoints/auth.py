@@ -142,7 +142,7 @@ async def resend_otp(
         raise HTTPException(status_code=404, detail="Email not found")
     if user.is_active:
         raise HTTPException(status_code=400, detail="Account already activated")
-    if getattr(user, "is_deleted", False):
+    if user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Account not found")
 
     await otp_service.create_and_send_otp(

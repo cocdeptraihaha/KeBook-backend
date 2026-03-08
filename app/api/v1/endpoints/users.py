@@ -1,27 +1,16 @@
 """User endpoints."""
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user import User as UserSchema, UserUpdate
 from app.services.user_service import user_service
 
 router = APIRouter()
-
-
-@router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-async def create_user(
-    user_in: UserCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Register new user."""
-    try:
-        user = await user_service.create_user(db, user_in)
-        return user
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/me", response_model=UserSchema)
@@ -38,7 +27,7 @@ async def read_user(
 ):
     """Get user by ID."""
     user = await user_service.repository.get(db, user_id)
-    if not user:
+    if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
@@ -54,7 +43,7 @@ async def update_user(
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
     user = await user_service.update_user(db, user_id, user_in)
-    if not user:
+    if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
@@ -65,9 +54,13 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete user (own account only)."""
+    """Soft delete user (own account only)."""
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
-    deleted = await user_service.repository.delete(db, user_id)
-    if not deleted:
+
+    user = await user_service.repository.get(db, user_id)
+    if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
+
+    user.deleted_at = datetime.utcnow()
+    await db.flush()

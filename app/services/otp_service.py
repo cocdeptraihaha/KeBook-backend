@@ -58,7 +58,7 @@ class OTPService:
                 select(User).where(
                     User.email == email,
                     User.is_active == False,  # noqa: E712
-                    User.is_deleted == False,  # noqa: E712
+                    User.deleted_at.is_(None),
                 )
             )
             user = r.scalars().first()

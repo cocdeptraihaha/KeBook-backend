@@ -34,7 +34,11 @@ async def get_current_user(
         raise credentials_exception
 
     user = await user_repository.get(db, user_id)
-    if user is None or getattr(user, "is_deleted", False):
+    if user is None:
+        raise credentials_exception
+
+    deleted_at = getattr(user, "deleted_at", None)
+    if deleted_at is not None:
         raise credentials_exception
     return user
 
