@@ -20,6 +20,18 @@ class BookDetailCreate(BookDetailBase):
     pass
 
 
+class BookDetailUpdate(BaseModel):
+    description: Optional[str] = None
+    height: Optional[float] = None
+    image_url: Optional[str] = None
+    length: Optional[float] = None
+    pages: Optional[int] = None
+    publisher: Optional[str] = None
+    supplier: Optional[str] = None
+    weight: Optional[float] = None
+    width: Optional[float] = None
+
+
 class BookDetail(BookDetailBase):
     id: int
 
@@ -39,6 +51,11 @@ class BookBase(BaseModel):
 
 class BookCreate(BookBase):
     pass
+
+
+class BookCreateWithDetail(BookBase):
+    """Create book with optional nested book_detail. If book_detail provided, creates both in one call."""
+    book_detail: Optional[BookDetailCreate] = None
 
 
 class BookUpdate(BaseModel):

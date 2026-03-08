@@ -9,7 +9,7 @@ from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.book import Book
 from app.models.user import User
-from app.schemas.book import Book as BookSchema, BookCreate, BookUpdate, BookWithDetail
+from app.schemas.book import Book as BookSchema, BookCreate, BookCreateWithDetail, BookUpdate, BookWithDetail
 from app.services.book_service import book_service
 
 router = APIRouter()
@@ -37,12 +37,12 @@ async def list_books(
     return await apaginate(db, stmt)
 
 
-@router.get("/{book_id}", response_model=BookSchema)
+@router.get("/{book_id}", response_model=BookWithDetail)
 async def get_book(
     book_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Book detail (public)."""
+    """Book detail with nested book_detail (public)."""
     book = await book_service.repository.get_with_detail(db, book_id)
     if not book or book.is_deleted:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -51,12 +51,15 @@ async def get_book(
 
 @router.post("/", response_model=BookSchema, status_code=status.HTTP_201_CREATED)
 async def create_book(
-    book_in: BookCreate,
+    book_in: BookCreate | BookCreateWithDetail,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
-    """Create new book (admin only)."""
-    book = await book_service.create_book(db, book_in)
+    """Create new book (admin only). Can include nested book_detail to create both in one call."""
+    detail_in = getattr(book_in, "book_detail", None)
+    data = {k: v for k, v in book_in.model_dump().items() if k != "book_detail"}
+    book_data = BookCreate(**data)
+    book = await book_service.create_book(db, book_data, detail_in=detail_in)
     return book
 
 

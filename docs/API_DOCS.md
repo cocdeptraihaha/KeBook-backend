@@ -159,9 +159,48 @@ Error 400: `{ "detail": "Account not activated. Please check your email for the 
 | Method | Path | Auth | Description |
 |--------|------|------|--------------|
 | GET | `/` | Public | List books (paginated) |
-| GET | `/{book_id}` | Public | Book detail |
+| GET | `/{book_id}` | Public | Book detail (with nested book_detail) |
 | POST | `/` | Admin | Create book |
 | PATCH | `/{book_id}` | Admin | Update book |
+
+### POST `/books/` (Admin) – Frontend flow
+
+**Option A: Create book + book_detail in one call**
+```json
+{
+  "title": "Book Title",
+  "author": "Author Name",
+  "selling_price": 100000,
+  "stock_quantity": 10,
+  "code": "ISBN123",
+  "edition": 1,
+  "publication_date": "2024-01-01",
+  "book_detail": {
+    "description": "Book description",
+    "image_url": "https://...",
+    "pages": 200,
+    "publisher": "Publisher Name",
+    "height": 20.5,
+    "width": 14.0,
+    "weight": 0.3
+  }
+}
+```
+
+**Option B: Create book_detail first, then book**
+1. `POST /book-details` → get `{ "id": 1, ... }`
+2. `POST /books` with `book_detail_id: 1`
+
+**Option C: Book without detail**
+```json
+{
+  "title": "Book Title",
+  "author": "Author",
+  "selling_price": 50000,
+  "stock_quantity": 5,
+  "book_detail_id": null
+}
+```
 
 ### GET `/books/` (paginated)
 Query: `?page=1&size=50&q=keyword`
@@ -193,6 +232,33 @@ Response:
   "book_detail_id": null
 }
 ```
+
+---
+
+## 3b. Book Details (`/book-details`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|--------------|
+| GET | `/` | Admin | List book details |
+| GET | `/{detail_id}` | Admin | Book detail by ID |
+| POST | `/` | Admin | Create book detail |
+| PATCH | `/{detail_id}` | Admin | Update book detail |
+
+### POST `/book-details/` (Admin)
+```json
+{
+  "description": "Book description",
+  "image_url": "https://example.com/cover.jpg",
+  "pages": 200,
+  "publisher": "Publisher Name",
+  "height": 20.5,
+  "length": 25.0,
+  "width": 14.0,
+  "weight": 0.3,
+  "supplier": "Supplier Name"
+}
+```
+Response: `{ "id": 1, "description": "...", ... }` – use `id` for `book_detail_id` when creating book.
 
 ---
 

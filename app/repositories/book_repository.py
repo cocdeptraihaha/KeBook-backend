@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
 from app.models.book_detail import BookDetail
-from app.schemas.book import BookCreate, BookUpdate, BookDetailCreate
+from app.schemas.book import BookCreate, BookUpdate, BookDetailCreate, BookDetailUpdate
 from app.repositories.base_repository import BaseRepository
 
 
@@ -53,7 +53,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         return list(result.scalars().all())
 
 
-class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDetailCreate]):
+class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDetailUpdate]):
     """Repository cho BookDetail."""
 
     pass
