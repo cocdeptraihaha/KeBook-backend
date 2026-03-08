@@ -34,6 +34,11 @@ Thumbs.db
 # Logs
 *.log
 
-#agents
+# Test / coverage (optional: commit tests but ignore output)
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Agents / local tooling
 .agents/
 .cursor/
