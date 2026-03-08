@@ -21,7 +21,7 @@ class OTPService:
         return str(random.randint(100000, 999999))
 
     async def delete_expired_otps(self, db: AsyncSession) -> int:
-        """Xóa tất cả OTP đã hết hạn. Trả về số bản ghi đã xóa."""
+        """Delete ALL expired OTPs (both ACTIVATION and RESET_PASSWORD). Returns count deleted."""
         result = await db.execute(delete(OTP).where(OTP.expires_at < datetime.utcnow()))
         return result.rowcount
 
@@ -29,11 +29,9 @@ class OTPService:
         self, db: AsyncSession
     ) -> tuple[int, int]:
         """
-        Nếu OTP hết hạn mà user của OTP chưa được kích hoạt thì xóa tài khoản.
-        - Lấy email có OTP kích hoạt đã hết hạn
-        - Với mỗi email: nếu user tồn tại, chưa active, chưa bị xóa → xóa user (hard delete để có thể đăng ký lại)
-        - Xóa tất cả OTP đã hết hạn
-        Trả về (số user đã xóa, số OTP đã xóa).
+        - Delete inactive users only when ALL their activation OTPs are expired
+        - Delete ALL expired OTPs (ACTIVATION + RESET_PASSWORD / forgot-password)
+        Returns (users_deleted, otps_deleted).
         """
         now = datetime.utcnow()
         result = await db.execute(
@@ -42,9 +40,20 @@ class OTPService:
                 OTP.otp_type == OTPType.ACTIVATION,
             ).distinct()
         )
-        emails = [row[0] for row in result.fetchall()]
+        emails_with_expired = [row[0] for row in result.fetchall()]
         users_deleted = 0
-        for email in emails:
+        for email in emails_with_expired:
+            # Only delete if user has NO valid activation OTP (all expired or used)
+            has_valid = await db.execute(
+                select(OTP.id).where(
+                    OTP.email == email,
+                    OTP.otp_type == OTPType.ACTIVATION,
+                    OTP.expires_at >= now,
+                    OTP.is_used == False,  # noqa: E712
+                ).limit(1)
+            )
+            if has_valid.first():
+                continue  # User has valid OTP, do not delete
             r = await db.execute(
                 select(User).where(
                     User.email == email,
