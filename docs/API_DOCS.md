@@ -364,7 +364,7 @@ Error 400: `{ "detail": "Account not activated. Please check your email for the 
 Query: `?page=1&size=50&q=keyword`
 - `page`: page number (default 1)
 - `size`: items per page (default 50)
-- `q`: search by title, author
+- `q`: search by title, author, description, publisher, supplier
 
 Response:
 ```json

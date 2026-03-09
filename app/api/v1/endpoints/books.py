@@ -8,6 +8,7 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.book import Book
+from app.models.book_detail import BookDetail
 from app.models.user import User
 from app.schemas.book import Book as BookSchema, BookCreate, BookCreateWithDetail, BookUpdate, BookWithDetail
 from app.services.book_service import book_service
@@ -23,6 +24,7 @@ async def list_books(
     """List books with pagination (public - no auth required)."""
     stmt = (
         select(Book)
+        .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
         .where(Book.deleted_at.is_(None))  # noqa: E712
         .order_by(Book.id)
     )
@@ -32,6 +34,9 @@ async def list_books(
             or_(
                 func.lower(Book.title).like(pattern),
                 func.lower(Book.author).like(pattern),
+                func.lower(BookDetail.description).like(pattern),
+                func.lower(BookDetail.publisher).like(pattern),
+                func.lower(BookDetail.supplier).like(pattern),
             )
         )
     return await apaginate(db, stmt)
