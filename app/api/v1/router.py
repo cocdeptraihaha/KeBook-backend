@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    addresses,
     auth,
     users,
     books,
@@ -14,11 +15,13 @@ from app.api.v1.endpoints import (
     return_requests,
     notifications,
     support_requests,
+    upload,
     test_utils,
 )
 
 api_router = APIRouter()
 
+api_router.include_router(addresses.router, prefix="/addresses", tags=["addresses"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(books.router, prefix="/books", tags=["books"])
@@ -31,4 +34,5 @@ api_router.include_router(promotions.router, prefix="/promotions", tags=["promot
 api_router.include_router(return_requests.router, prefix="/return-requests", tags=["return-requests"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(support_requests.router, prefix="/support-requests", tags=["support-requests"])
+api_router.include_router(upload.router, prefix="/upload", tags=["upload"])
 api_router.include_router(test_utils.router, prefix="/test", tags=["test"])

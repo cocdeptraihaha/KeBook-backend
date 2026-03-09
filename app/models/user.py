@@ -14,6 +14,8 @@ class User(Base):
     # Profile
     full_name = Column(String(255), nullable=True)
     address = Column(String(255), nullable=True)
+    province = Column(String(255), nullable=True)
+    ward = Column(String(255), nullable=True)
     avatar_url = Column(String(255), nullable=True)
     date_of_birth = Column(DateTime, nullable=True)
     gender = Column(String(255), nullable=True)

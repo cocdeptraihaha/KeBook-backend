@@ -11,6 +11,8 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     full_name: Optional[str] = None
     address: Optional[str] = None
+    province: Optional[str] = None
+    ward: Optional[str] = None
     avatar_url: Optional[str] = None
     date_of_birth: Optional[datetime | date] = None  # MySQL DATE -> date, DATETIME -> datetime
     gender: Optional[str] = None
@@ -42,6 +44,8 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     full_name: Optional[str] = None
     address: Optional[str] = None
+    province: Optional[str] = None
+    ward: Optional[str] = None
     avatar_url: Optional[str] = None
     date_of_birth: Optional[datetime | date] = None
     gender: Optional[str] = None

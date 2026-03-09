@@ -25,7 +25,17 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/auth/forgot-password` | Public |
 | POST | `/auth/reset-password` | Public |
 
-### 2. Người dùng (`/users`)
+### 2. Địa chỉ (`/addresses`)
+| Method | Path | Auth | Mô tả |
+|--------|------|------|-------|
+| GET | `/addresses/provinces` | Public | Danh sách tỉnh/thành |
+| GET | `/addresses/wards?province_id=...` | Public | Danh sách phường/xã theo tỉnh |
+
+- Không dùng quận/huyện (khớp với DB users: province + ward).
+- Dữ liệu từ [provinces.open-api.vn](https://provinces.open-api.vn/) **API v2** (sau sáp nhập tỉnh thành 07/2025), cache tại backend.
+- Response: `[{ "code": 1, "name": "Thành phố Hà Nội" }, ...]`
+
+### 3. Người dùng (`/users`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/users/me` | User |
@@ -33,7 +43,7 @@ Base URL: `http://localhost:8000/api/v1`
 | PATCH | `/users/{user_id}` | User |
 | DELETE | `/users/{user_id}` | User |
 
-### 3. Sách (`/books`)
+### 4. Sách (`/books`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/books/` | Public |
@@ -41,7 +51,7 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/books/` | Admin |
 | PATCH | `/books/{book_id}` | Admin |
 
-### 4. Book Details (`/book-details`)
+### 5. Book Details (`/book-details`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/book-details/` | Admin |
@@ -49,7 +59,7 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/book-details/` | Admin |
 | PATCH | `/book-details/{detail_id}` | Admin |
 
-### 5. Danh mục (`/categories`)
+### 6. Danh mục (`/categories`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/categories/` | Public |
@@ -58,7 +68,37 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/categories/` | Admin |
 | PATCH | `/categories/{category_id}` | Admin |
 
-### 6. Giỏ hàng (`/cart`)
+### 7. Upload ảnh (`/upload`)
+| Method | Path | Auth | Mô tả |
+|--------|------|------|--------|
+| POST | `/upload/image` | User | Upload ảnh lên Cloudinary, trả về URL (query: `folder`, mặc định `kebook`) |
+| POST | `/upload/avatar` | User | Upload ảnh lên Cloudinary và lưu URL vào `user.avatar_url` (DB) |
+| POST | `/upload/book-detail/{detail_id}/image` | Admin | Upload ảnh lên Cloudinary và lưu URL vào `book_details.image_url` (DB) |
+
+- Content-Type: `multipart/form-data`, field `file`. Cho phép: JPEG, PNG, GIF, WebP; tối đa 5MB.
+- Cần biến môi trường `CLOUDINARY_URL` (format: `cloudinary://api_key:api_secret@cloud_name`).
+
+Response mẫu:
+
+`/upload/image`
+
+```json
+{ "url": "https://res.cloudinary.com/<cloud>/image/upload/..." }
+```
+
+`/upload/avatar`
+
+```json
+{ "url": "https://res.cloudinary.com/<cloud>/image/upload/...", "avatar_url": "https://res.cloudinary.com/<cloud>/image/upload/..." }
+```
+
+`/upload/book-detail/{detail_id}/image`
+
+```json
+{ "url": "https://res.cloudinary.com/<cloud>/image/upload/...", "image_url": "https://res.cloudinary.com/<cloud>/image/upload/...", "detail_id": 123 }
+```
+
+### 8. Giỏ hàng (`/cart`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/cart/` | User |
@@ -66,7 +106,7 @@ Base URL: `http://localhost:8000/api/v1`
 | PATCH | `/cart/{cart_id}` | User |
 | DELETE | `/cart/{cart_id}` | User |
 
-### 7. Đơn hàng (`/orders`)
+### 9. Đơn hàng (`/orders`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/orders/` | User |
@@ -75,7 +115,7 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/orders/` | User |
 | PATCH | `/orders/{order_id}/status` | Admin |
 
-### 8. Đánh giá (`/reviews`)
+### 10. Đánh giá (`/reviews`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/reviews/book/{book_id}` | Public |
@@ -84,7 +124,7 @@ Base URL: `http://localhost:8000/api/v1`
 | PATCH | `/reviews/{review_id}` | User |
 | DELETE | `/reviews/{review_id}` | User |
 
-### 9. Khuyến mãi (`/promotions`)
+### 11. Khuyến mãi (`/promotions`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/promotions/validate` | Public |
@@ -92,14 +132,14 @@ Base URL: `http://localhost:8000/api/v1`
 | POST | `/promotions/` | Admin |
 | PATCH | `/promotions/{promo_id}` | Admin |
 
-### 10. Yêu cầu trả hàng (`/return-requests`)
+### 12. Yêu cầu trả hàng (`/return-requests`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/return-requests/` | User |
 | POST | `/return-requests/` | User |
 | PATCH | `/return-requests/{req_id}/process` | Admin |
 
-### 11. Thông báo (`/notifications`)
+### 13. Thông báo (`/notifications`)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/notifications/me` | User |
@@ -107,21 +147,21 @@ Base URL: `http://localhost:8000/api/v1`
 | GET | `/notifications/` | Admin |
 | POST | `/notifications/` | Admin |
 
-### 12. Hỗ trợ (`/support-requests`)
+### 14. Hỗ trợ (`/support-requests`)
 | Method | Path | Auth |
 |--------|------|------|
 | POST | `/support-requests/` | User |
 | GET | `/support-requests/` | Admin |
 | PATCH | `/support-requests/{req_id}` | Admin |
 
-### 13. Test (`/test`) – Chỉ khi TESTING=1
+### 15. Test (`/test`) – Chỉ khi TESTING=1
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/test/otp` | Public |
 | POST | `/test/make-admin` | Public |
 | POST | `/test/books` | Public |
 
-### 14. Health Check (root, không thuộc /api/v1)
+### 15. Health Check (root, không thuộc /api/v1)
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/` | Public |

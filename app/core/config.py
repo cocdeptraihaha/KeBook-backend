@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application settings from environment."""
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
-    SECRET_KEY: str = "keynaykhongaibiet"
+    SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 90
     API_V1_STR: str = "/api/v1"
     
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # OTP settings
     OTP_EXPIRE_SECONDS: int = 90  # OTP hết hạn sau 90 giây
     OTP_LENGTH: int = 6  # Độ dài OTP (6 số)
+
+    # Cloudinary (upload ảnh). Format: cloudinary://api_key:api_secret@cloud_name
+    CLOUDINARY_URL: str = ""
 
     class Config:
         env_file = ".env"

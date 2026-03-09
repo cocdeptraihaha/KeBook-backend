@@ -21,6 +21,9 @@ bcrypt==4.3.0
 # HTTP Client (tests)
 httpx>=0.26.0
 
+# Image upload
+cloudinary>=1.36.0
+
 # Dev & Test
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
