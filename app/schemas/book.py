@@ -115,7 +115,8 @@ class BookUpdate(BaseModel):
 class Book(BookBase):
     id: int
     deleted_at: Optional[datetime] = None
-    # Loaded via ORM relationship; excluded from API output but used for computed fields
+    # Loaded via ORM relationships; excluded from API output but used for computed fields
+    book_detail: Optional[BookDetail] = Field(default=None, exclude=True)
     discounts: List[BookDiscountOut] = Field(default_factory=list, exclude=True)
 
     model_config = {"from_attributes": True}
@@ -150,6 +151,12 @@ class Book(BookBase):
         if self.selling_price is None:
             return None
         return round(max(0.0, (self.selling_price or 0.0) - self.discount_amount), 2)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def image_url(self) -> Optional[str]:
+        detail = self.book_detail
+        return detail.image_url if detail and getattr(detail, "image_url", None) is not None else None
 
 
 class BookWithDetail(Book):

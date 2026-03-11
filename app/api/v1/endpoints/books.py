@@ -13,7 +13,13 @@ from app.models.book_category import BookCategory
 from app.models.book_detail import BookDetail
 from app.models.category import Category
 from app.models.user import User
-from app.schemas.book import Book as BookSchema, BookCreate, BookCreateWithDetail, BookUpdate, BookWithDetail
+from app.schemas.book import (
+    Book as BookSchema,
+    BookCreate,
+    BookCreateWithDetail,
+    BookUpdate,
+    BookWithDetail,
+)
 from app.services.book_service import book_service
 
 router = APIRouter()
@@ -29,7 +35,7 @@ async def list_books(
     stmt = (
         select(Book)
         .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
-        .options(selectinload(Book.discounts))
+        .options(selectinload(Book.discounts), selectinload(Book.book_detail))
     )
 
     # Filter by category tree (parent -> all descendants + itself)
