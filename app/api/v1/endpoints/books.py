@@ -1,5 +1,5 @@
 """Book endpoints - sách."""
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, exists
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination import Page
@@ -8,7 +8,9 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.book import Book
+from app.models.book_category import BookCategory
 from app.models.book_detail import BookDetail
+from app.models.category import Category
 from app.models.user import User
 from app.schemas.book import Book as BookSchema, BookCreate, BookCreateWithDetail, BookUpdate, BookWithDetail
 from app.services.book_service import book_service
@@ -19,15 +21,36 @@ router = APIRouter()
 @router.get("/", response_model=Page[BookSchema])
 async def list_books(
     q: str | None = Query(None, description="Search by title, author"),
+    category_id: int | None = Query(None, description="Filter books by category_id"),
     db: AsyncSession = Depends(get_db),
 ):
     """List books with pagination (public - no auth required)."""
-    stmt = (
-        select(Book)
-        .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
-        .where(Book.deleted_at.is_(None))  # noqa: E712
-        .order_by(Book.id)
-    )
+    stmt = select(Book).join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
+
+    # Filter by category tree (parent -> all descendants + itself)
+    if category_id is not None:
+        cat_tree = (
+            select(Category.id)
+            .where(Category.id == category_id)
+            .cte(name="cat_tree", recursive=True)
+        )
+        cat_tree = cat_tree.union_all(
+            select(Category.id)
+            .join(cat_tree, Category.parent_id == cat_tree.c.id)
+        )
+
+        stmt = stmt.where(
+            exists(
+                select(1)
+                .select_from(BookCategory)
+                .where(BookCategory.book_id == Book.id)
+                .where(BookCategory.category_id.in_(select(cat_tree.c.id)))
+            )
+        )
+    else:
+        stmt = stmt.join(BookCategory, BookCategory.book_id == Book.id, isouter=True)
+
+    stmt = stmt.where(Book.deleted_at.is_(None)).order_by(Book.id)  # noqa: E712
     if q:
         pattern = f"%{q.lower()}%"
         stmt = stmt.where(
