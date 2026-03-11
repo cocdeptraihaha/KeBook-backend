@@ -10,7 +10,7 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 from app.core.database import get_db
-from app.core.security import create_access_token, verify_password, get_password_hash
+from app.core.security import create_access_token, verify_password
 from app.models.otp import OTPType
 from app.models.user import User
 from app.schemas.user import User as UserSchema, UserCreate
@@ -104,13 +104,11 @@ async def verify_otp(
                 raise HTTPException(status_code=400, detail="OTP code has expired")
             raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-        # Activate user
         user = await user_service.repository.get_by_email(db, request.email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        user.is_active = True
-        await db.flush()
+        await user_service.activate_user(db, user.id)
 
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
@@ -198,14 +196,11 @@ async def reset_password(
             raise HTTPException(status_code=400, detail="OTP code has expired")
         raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    # Get user
     user = await user_service.repository.get_by_email(db, request.email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Update password
-    user.hashed_password = get_password_hash(request.new_password)
-    await db.commit()
+    await user_service.reset_password(db, user.id, request.new_password)
 
     return {"message": "Password changed successfully. Please log in again."}
 
@@ -222,7 +217,13 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email/username or password",
         )
-    
+
+    if user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account has been deactivated",
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=400,

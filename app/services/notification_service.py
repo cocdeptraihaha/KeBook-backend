@@ -43,6 +43,12 @@ class NotificationService:
         await db.refresh(notif)
         return notif
 
+    async def get_all(
+        self, db: AsyncSession, skip: int = 0, limit: int = 100
+    ) -> List[Notification]:
+        """Admin: lấy tất cả thông báo."""
+        return await self.repository.get_multi_active(db, skip, limit)
+
     async def get_user_notifications(
         self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
     ) -> List[UserNotification]:

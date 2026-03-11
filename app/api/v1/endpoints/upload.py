@@ -4,9 +4,9 @@ from pydantic import BaseModel
 
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.models.user import User
-from app.models.book_detail import BookDetail as BookDetailModel
 from app.services.cloudinary_service import upload_image, delete_image_by_url
 from app.services.user_service import user_service
+from app.repositories.book_repository import book_detail_repository
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -128,7 +128,7 @@ async def upload_book_detail_image(
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    detail = await db.get(BookDetailModel, detail_id)
+    detail = await book_detail_repository.get(db, detail_id)
     if not detail:
         raise HTTPException(status_code=404, detail="Book detail not found")
     if detail.image_url:

@@ -5,9 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.notification import Notification, NotificationCreate, NotificationSendRequest
+from app.schemas.notification import Notification, NotificationSendRequest
 from app.services.notification_service import notification_service
-from app.repositories.notification_repository import notification_repository
 
 router = APIRouter()
 
@@ -48,7 +47,7 @@ async def list_notifications(
     current_user: User = Depends(get_current_superuser),
 ):
     """List notifications (admin)."""
-    return await notification_repository.get_multi_active(db, skip, limit)
+    return await notification_service.get_all(db, skip, limit)
 
 
 @router.post("/", response_model=Notification, status_code=201)

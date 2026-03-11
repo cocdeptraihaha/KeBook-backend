@@ -16,7 +16,9 @@ class UserService:
 
     async def create_user(self, db: AsyncSession, user_in: UserCreate) -> User:
         """Tạo user mới (hash password)."""
-        existing_email = await self.repository.get_by_email(db, user_in.email)
+        existing_email = await self.repository.get_by_email(
+            db, user_in.email, include_deleted=True
+        )
         if existing_email:
             raise ValueError("Email already registered")
 
@@ -30,6 +32,25 @@ class UserService:
         user = await self.repository.create(db, UserCreateInDB(**data))
         user.is_active = False
         user.is_superuser = False
+        await db.flush()
+        await db.refresh(user)
+        return user
+
+    async def reset_password(self, db: AsyncSession, user_id: int, new_password: str) -> Optional[User]:
+        """Reset password cho user."""
+        user = await self.repository.get(db, user_id)
+        if not user:
+            return None
+        user.hashed_password = get_password_hash(new_password)
+        await db.flush()
+        return user
+
+    async def activate_user(self, db: AsyncSession, user_id: int) -> Optional[User]:
+        """Kích hoạt tài khoản user."""
+        user = await self.repository.get(db, user_id)
+        if not user:
+            return None
+        user.is_active = True
         await db.flush()
         await db.refresh(user)
         return user

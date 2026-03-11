@@ -25,7 +25,9 @@ async def read_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get user by ID."""
+    """Get user by ID (self or admin only)."""
+    if current_user.id != user_id and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Permission denied")
     user = await user_service.repository.get(db, user_id)
     if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")

@@ -1,11 +1,15 @@
 """Cart service."""
 from datetime import date
 from typing import List
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cart import Cart
-from app.models.book import Book
-from app.schemas.cart import CartCreate, CartUpdate
+from app.models.book import Book as BookModel
+from app.models.book_detail import BookDetail as BookDetailModel
+from app.models.book_discount import BookDiscount
+from app.models.book_book_discount import BookBookDiscount
+from app.schemas.cart import CartCreate, CartUpdate, CartItemSummary
 from app.repositories.cart_repository import cart_repository
 
 
@@ -45,6 +49,75 @@ class CartService:
         self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
     ) -> List[Cart]:
         return await self.repository.get_by_user(db, user_id, skip, limit)
+
+    async def get_user_cart_summary(
+        self, db: AsyncSession, user_id: int
+    ) -> List[CartItemSummary]:
+        """Get cart with book info and discount-aware pricing."""
+        now = func.now()
+
+        percent_amount = (
+            func.coalesce(BookModel.selling_price, 0)
+            * func.coalesce(BookDiscount.discount_percent, 0)
+            / 100.0
+        )
+        amount_expr = func.greatest(
+            func.coalesce(BookDiscount.discount_amount, 0),
+            func.coalesce(percent_amount, 0),
+        )
+        disc_subq = (
+            select(
+                BookBookDiscount.book_id.label("book_id"),
+                func.max(amount_expr).label("best_discount"),
+            )
+            .join(BookDiscount, BookDiscount.id == BookBookDiscount.discount_id)
+            .join(BookModel, BookModel.id == BookBookDiscount.book_id)
+            .where(
+                BookModel.deleted_at.is_(None),
+                func.coalesce(BookDiscount.start_date, now) <= now,
+                func.coalesce(BookDiscount.end_date, now) >= now,
+            )
+            .group_by(BookBookDiscount.book_id)
+            .subquery()
+        )
+        stmt = (
+            select(
+                Cart,
+                BookModel.title,
+                BookModel.selling_price,
+                BookModel.stock_quantity,
+                BookDetailModel.image_url,
+                func.coalesce(disc_subq.c.best_discount, 0.0).label("best_discount"),
+            )
+            .join(BookModel, Cart.book_id == BookModel.id)
+            .join(
+                BookDetailModel,
+                BookModel.book_detail_id == BookDetailModel.id,
+                isouter=True,
+            )
+            .join(disc_subq, BookModel.id == disc_subq.c.book_id, isouter=True)
+            .where(Cart.user_id == user_id)
+        )
+        result = await db.execute(stmt)
+        rows = result.all()
+        summaries: List[CartItemSummary] = []
+        for cart_row, title, selling_price, stock_quantity, image_url, best_discount in rows:
+            selling_price = selling_price or 0.0
+            best_discount = best_discount or 0.0
+            final_price = max(0.0, selling_price - best_discount)
+            summaries.append(
+                CartItemSummary(
+                    id=cart_row.id,
+                    quantity=cart_row.quantity or 0,
+                    book_id=cart_row.book_id,
+                    title=title,
+                    price=final_price,
+                    original_price=selling_price,
+                    image_url=image_url,
+                    stock_quantity=stock_quantity,
+                )
+            )
+        return summaries
 
     async def update_quantity(
         self, db: AsyncSession, cart_id: int, user_id: int, quantity: int
