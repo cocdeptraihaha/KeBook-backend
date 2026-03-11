@@ -16,7 +16,9 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
     async def get_with_detail(self, db: AsyncSession, id: int) -> Optional[Book]:
         """Lấy book kèm book_detail."""
         result = await db.execute(
-            select(Book).where(Book.id == id).options(selectinload(Book.book_detail))
+            select(Book)
+            .where(Book.id == id)
+            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
         )
         return result.scalars().first()
 

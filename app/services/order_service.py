@@ -12,6 +12,7 @@ from app.models.payment import Payment, PaymentMethod
 from app.models.service import Service
 from app.models.cart import Cart
 from app.models.book import Book
+from app.schemas.book import BookDiscountOut, _pick_active_discount
 from app.schemas.order import OrderCreate, CheckoutRequest
 from app.repositories.order_repository import order_repository
 from app.repositories.cart_repository import cart_repository
@@ -100,7 +101,11 @@ class OrderService:
             book = await db.get(Book, item.book_id)
             if not book or book.deleted_at is not None:
                 raise ValueError(f"Book id={item.book_id} not found")
-            price = book.selling_price or 0
+            original_price = book.selling_price or 0
+            # Compute per-book active discount (if any) and use final price for checkout
+            discounts = [BookDiscountOut.model_validate(d) for d in (book.discounts or [])]
+            _, discount_amt = _pick_active_discount(discounts, original_price)
+            price = max(0.0, original_price - discount_amt)
             qty = item.quantity or 1
             if (book.stock_quantity or 0) < qty:
                 raise ValueError(f"Book '{book.title}' insufficient stock")

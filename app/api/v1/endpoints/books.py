@@ -2,6 +2,7 @@
 from sqlalchemy import select, or_, func, exists
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import apaginate
 
@@ -25,7 +26,11 @@ async def list_books(
     db: AsyncSession = Depends(get_db),
 ):
     """List books with pagination (public - no auth required)."""
-    stmt = select(Book).join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
+    stmt = (
+        select(Book)
+        .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
+        .options(selectinload(Book.discounts))
+    )
 
     # Filter by category tree (parent -> all descendants + itself)
     if category_id is not None:
