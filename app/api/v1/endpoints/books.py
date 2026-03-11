@@ -11,6 +11,8 @@ from app.core.database import get_db
 from app.models.book import Book
 from app.models.book_category import BookCategory
 from app.models.book_detail import BookDetail
+from app.models.book_discount import BookDiscount
+from app.models.order_item import OrderItem
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.book import (
@@ -74,6 +76,85 @@ async def list_books(
             )
         )
     return await apaginate(db, stmt)
+
+
+@router.get("/top-selling", response_model=list[BookSchema])
+async def top_selling_books(
+    limit: int = Query(10, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top N best-selling books by quantity."""
+    # Aggregate quantities per book_id
+    qty_subq = (
+        select(
+            OrderItem.book_id.label("book_id"),
+            func.sum(OrderItem.quantity).label("total_qty"),
+        )
+        .where(OrderItem.deleted_at.is_(None), OrderItem.book_id.is_not(None))
+        .group_by(OrderItem.book_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Book)
+        .join(qty_subq, Book.id == qty_subq.c.book_id)
+        .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+        .where(Book.deleted_at.is_(None))
+        .order_by(qty_subq.c.total_qty.desc())
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    books = result.scalars().all()
+    return books
+
+
+@router.get("/top-discounted", response_model=list[BookSchema])
+async def top_discounted_books(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top N books by biggest active discount amount."""
+    now = func.now()
+
+    # Effective discount amount per discount row
+    percent_amount = (
+        func.coalesce(Book.selling_price, 0) * func.coalesce(BookDiscount.discount_percent, 0) / 100.0
+    )
+    amount_expr = func.greatest(
+        func.coalesce(BookDiscount.discount_amount, 0),
+        func.coalesce(percent_amount, 0),
+    )
+
+    disc_subq = (
+        select(
+            BookDiscount.book_id.label("book_id"),
+            func.max(amount_expr).label("best_discount"),
+        )
+        .join(Book, Book.id == BookDiscount.book_id)
+        .where(
+            Book.deleted_at.is_(None),
+            BookDiscount.book_id.is_not(None),
+            # active discount window
+            func.coalesce(BookDiscount.start_date, now) <= now,
+            func.coalesce(BookDiscount.end_date, now) >= now,
+        )
+        .group_by(BookDiscount.book_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Book)
+        .join(disc_subq, Book.id == disc_subq.c.book_id)
+        .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+        .where(Book.deleted_at.is_(None))
+        .order_by(disc_subq.c.best_discount.desc())
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    books = result.scalars().all()
+    return books
 
 
 @router.get("/{book_id}", response_model=BookWithDetail)
