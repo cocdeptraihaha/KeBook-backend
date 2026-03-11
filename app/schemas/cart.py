@@ -34,3 +34,14 @@ class Cart(CartBase):
 
 class CartWithBook(Cart):
     book: Optional["Book"] = None
+
+
+class CartItemSummary(BaseModel):
+    id: int
+    quantity: int
+    book_id: int
+    title: Optional[str] = None
+    price: Optional[float] = None
+    original_price: Optional[float] = None
+    image_url: Optional[str] = None
+    stock_quantity: Optional[int] = None
