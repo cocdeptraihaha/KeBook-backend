@@ -1,7 +1,7 @@
 """Book schemas."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Optional, List, Tuple
 
 from pydantic import BaseModel, Field, computed_field
@@ -22,7 +22,8 @@ def _pick_active_discount(
     if not discounts or not original_price or original_price <= 0:
         return None, 0.0
 
-    now = datetime.now(timezone.utc)
+    # Use naive UTC for comparison to match typical DB datetime values
+    now = datetime.utcnow()
     best: Optional[BookDiscountOut] = None
     best_amount = 0.0
 
