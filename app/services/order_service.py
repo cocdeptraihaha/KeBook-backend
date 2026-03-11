@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -88,17 +89,28 @@ class OrderService:
 
     async def checkout_from_cart(
         self, db: AsyncSession, user_id: int, checkout_in: CheckoutRequest
-    ) -> Order:
-        """Tạo đơn hàng từ giỏ hàng."""
+    ):
+        """Tạo đơn hàng từ giỏ hàng. Trả về (order, item_amount, discount_total, shipping_fee, total_amount)."""
         cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
         if not cart_items:
             raise ValueError("Cart is empty")
+
+        # Preload all books with discounts to tránh lazy-load trong async (MissingGreenlet)
+        book_ids = {item.book_id for item in cart_items if item.book_id is not None}
+        books_by_id: dict[int, Book] = {}
+        if book_ids:
+            result_books = await db.execute(
+                select(Book)
+                .options(selectinload(Book.discounts))
+                .where(Book.id.in_(book_ids))
+            )
+            books_by_id = {b.id: b for b in result_books.scalars().all()}
 
         # Lấy giá sách, tính tổng, kiểm tra tồn kho
         subtotal = 0.0
         order_items_data = []
         for item in cart_items:
-            book = await db.get(Book, item.book_id)
+            book = books_by_id.get(item.book_id) if item.book_id is not None else None
             if not book or book.deleted_at is not None:
                 raise ValueError(f"Book id={item.book_id} not found")
             original_price = book.selling_price or 0
@@ -124,7 +136,18 @@ class OrderService:
             if promo:
                 promotion_id = promo.id
 
-        total = max(0, subtotal - discount_amount)
+        # Lấy service (shipping)
+        result = await db.execute(
+            select(Service).where(Service.deleted_at.is_(None)).limit(1)
+        )
+        service = result.scalars().first()
+        if not service:
+            service = Service(name_service="Standard delivery", price=0, status=True)
+            db.add(service)
+            await db.flush()
+        shipping_fee = float(service.price or 0)
+
+        total = max(0.0, subtotal - discount_amount + shipping_fee)
 
         # Tạo payment
         payment = Payment(
@@ -135,24 +158,21 @@ class OrderService:
         db.add(payment)
         await db.flush()
 
-        # Lấy service
-        result = await db.execute(
-            select(Service).where(Service.deleted_at.is_(None)).limit(1)
-        )
-        service = result.scalars().first()
-        if not service:
-            service = Service(name_service="Standard delivery", price=0, status=True)
-            db.add(service)
-            await db.flush()
-
         # Tạo order
+        address_parts = [
+            (checkout_in.shipping_address or "").strip(),
+            (checkout_in.ward or "").strip(),
+            (checkout_in.province or "").strip(),
+        ]
+        full_address = ", ".join([p for p in address_parts if p]) or None
+
         order = Order(
             user_id=user_id,
             payment_id=payment.id,
             service_id=service.id,
             note=checkout_in.note,
             phone_number=checkout_in.phone_number,
-            shipping_address=checkout_in.shipping_address,
+            shipping_address=full_address,
             status="PENDING",
             total_price=total,
             order_date=datetime.utcnow(),
@@ -184,7 +204,7 @@ class OrderService:
 
         await db.flush()
         await db.refresh(order)
-        return order
+        return order, subtotal, discount_amount, shipping_fee, total
 
     async def update_status(
         self,

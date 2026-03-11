@@ -41,6 +41,8 @@ class CheckoutRequest(BaseModel):
     note: Optional[str] = None
     phone_number: Optional[str] = None
     shipping_address: Optional[str] = None
+    province: Optional[str] = None
+    ward: Optional[str] = None
     promotion_code: Optional[str] = None
 
 
@@ -68,3 +70,11 @@ class Order(OrderBase):
 
 class OrderWithItems(Order):
     order_items: List[OrderItem] = []
+
+
+class OrderCheckoutOut(BaseModel):
+    order: OrderWithItems
+    item_amount: float
+    discount_total: float
+    shipping_fee: float
+    total_amount: float

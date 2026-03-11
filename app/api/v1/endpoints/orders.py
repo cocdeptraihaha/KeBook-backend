@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.order import Order, OrderCreate, OrderWithItems, CheckoutRequest, OrderStatusUpdate
+from app.schemas.order import (
+    Order,
+    OrderCreate,
+    OrderWithItems,
+    CheckoutRequest,
+    OrderStatusUpdate,
+    OrderCheckoutOut,
+)
 from app.services.order_service import order_service
 
 router = APIRouter()
@@ -35,16 +42,27 @@ async def get_order(
     return order
 
 
-@router.post("/checkout", response_model=Order, status_code=status.HTTP_201_CREATED)
+@router.post("/checkout", response_model=OrderCheckoutOut, status_code=status.HTTP_201_CREATED)
 async def checkout_from_cart(
     checkout_in: CheckoutRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Checkout from cart - create order from cart."""
+    """Checkout from cart - create order from cart. Tính toàn bộ tiền ở backend."""
     try:
-        return await order_service.checkout_from_cart(
+        order, item_amount, discount_total, shipping_fee, total_amount = await order_service.checkout_from_cart(
             db, current_user.id, checkout_in
+        )
+        # Lấy lại order kèm items để trả về đầy đủ
+        full_order = await order_service.get_order(db, order.id, current_user.id)
+        if not full_order:
+            full_order = order
+        return OrderCheckoutOut(
+            order=full_order,  # type: ignore[arg-type]
+            item_amount=item_amount,
+            discount_total=discount_total,
+            shipping_fee=shipping_fee,
+            total_amount=total_amount,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
