@@ -19,6 +19,23 @@ from app.repositories.order_repository import order_repository
 from app.repositories.cart_repository import cart_repository
 from app.services.promotion_service import promotion_service
 
+AUTO_CONFIRM_SECONDS = 30 * 60
+
+STATUS_MAP = {
+    "CANCELLED": OrderHistoryStatus.CANCELLED,
+    "CANCEL_REQUESTED": OrderHistoryStatus.CANCEL_REQUESTED,
+    "COMPLETED": OrderHistoryStatus.COMPLETED,
+    "CONFIRMED": OrderHistoryStatus.CONFIRMED,
+    "DELIVERED": OrderHistoryStatus.DELIVERED,
+    "INPROGRESS": OrderHistoryStatus.INPROGRESS,
+    "PENDING": OrderHistoryStatus.PENDING,
+    "PROCESSING": OrderHistoryStatus.PROCESSING,
+    "RETURNED": OrderHistoryStatus.RETURNED,
+    "SHIPPED": OrderHistoryStatus.SHIPPED,
+}
+
+VALID_STATUSES = set(STATUS_MAP.keys())
+
 
 class OrderService:
     """Logic nghiệp vụ cho Order."""
@@ -26,15 +43,46 @@ class OrderService:
     def __init__(self):
         self.repository = order_repository
 
+    # ── helpers ──────────────────────────────────────────────
+
+    def _add_history(
+        self,
+        db: AsyncSession,
+        order_id: int,
+        status: str,
+        description: Optional[str] = None,
+    ):
+        hist_enum = STATUS_MAP.get(status, OrderHistoryStatus.PENDING)
+        hist = OrderStatusHistory(
+            order_id=order_id,
+            e_order_history=hist_enum,
+            status_change_date=datetime.utcnow(),
+            description=description,
+        )
+        db.add(hist)
+
+    async def auto_confirm_if_needed(self, db: AsyncSession, order: Order) -> Order:
+        """Lazy auto-confirm: nếu PENDING > 30 phút → CONFIRMED."""
+        raw = str(order.status).replace("OrderStatus.", "")
+        if raw != "PENDING":
+            return order
+        if not order.order_date:
+            return order
+        elapsed = (datetime.utcnow() - order.order_date).total_seconds()
+        if elapsed < AUTO_CONFIRM_SECONDS:
+            return order
+        order.status = "CONFIRMED"
+        self._add_history(db, order.id, "CONFIRMED", "Tự động xác nhận sau 30 phút")
+        await db.flush()
+        await db.refresh(order)
+        return order
+
+    # ── CRUD ─────────────────────────────────────────────────
+
     async def create_order(
         self, db: AsyncSession, order_in: OrderCreate, user_id: int
     ) -> Order:
-        """Tạo đơn hàng mới."""
-        payment = Payment(
-            amount=0,
-            method=PaymentMethod.COD,
-            payment_status="PENDING",
-        )
+        payment = Payment(amount=0, method=PaymentMethod.COD, payment_status="PENDING")
         db.add(payment)
         await db.flush()
 
@@ -61,21 +109,19 @@ class OrderService:
         await db.flush()
 
         for item in order_in.items:
-            oi = OrderItem(
-                order_id=order.id,
-                book_id=item.book_id,
-                quantity=item.quantity,
-                price=item.price,
-            )
-            db.add(oi)
+            db.add(OrderItem(order_id=order.id, book_id=item.book_id, quantity=item.quantity, price=item.price))
+        self._add_history(db, order.id, "PENDING", "Đơn hàng mới")
         await db.flush()
         await db.refresh(order)
         return order
 
     async def get_user_orders(
-        self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
+        self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100, status: Optional[str] = None
     ) -> List[Order]:
-        return await self.repository.get_by_user(db, user_id, skip, limit)
+        orders = await self.repository.get_by_user(db, user_id, skip, limit, status=status)
+        for o in orders:
+            await self.auto_confirm_if_needed(db, o)
+        return orders
 
     async def get_order(
         self, db: AsyncSession, order_id: int, user_id: Optional[int] = None
@@ -85,7 +131,16 @@ class OrderService:
             return None
         if user_id and order.user_id != user_id:
             return None
+        await self.auto_confirm_if_needed(db, order)
         return order
+
+    async def get_all_orders(
+        self, db: AsyncSession, skip: int = 0, limit: int = 100, status: Optional[str] = None
+    ) -> List[Order]:
+        """Admin: lấy tất cả đơn."""
+        return await self.repository.get_all_orders(db, skip, limit, status=status)
+
+    # ── build order items ────────────────────────────────────
 
     async def _build_order_items(
         self,
@@ -93,17 +148,12 @@ class OrderService:
         user_id: int,
         items_spec: Iterable[Tuple[int, int]],
     ) -> Tuple[list[tuple[int, int, float]], float]:
-        """
-        Từ danh sách (book_id, quantity) tính ra (book_id, quantity, unit_price) và subtotal.
-        """
         book_ids = {book_id for book_id, _ in items_spec}
         if not book_ids:
             raise ValueError("No items to checkout")
 
         result_books = await db.execute(
-            select(Book)
-            .options(selectinload(Book.discounts))
-            .where(Book.id.in_(book_ids))
+            select(Book).options(selectinload(Book.discounts)).where(Book.id.in_(book_ids))
         )
         books_by_id: dict[int, Book] = {b.id: b for b in result_books.scalars().all()}
 
@@ -125,11 +175,11 @@ class OrderService:
             order_items_data.append((book_id, qty, price))
         return order_items_data, subtotal
 
+    # ── checkout ─────────────────────────────────────────────
+
     async def checkout_from_cart(
         self, db: AsyncSession, user_id: int, checkout_in: CheckoutRequest
     ):
-        """Tạo đơn hàng từ giỏ hàng hoặc danh sách items cụ thể. Trả về (order, item_amount, discount_total, shipping_fee, total_amount)."""
-        # Nếu client gửi danh sách items cụ thể thì ưu tiên dùng danh sách đó
         explicit_items = checkout_in.items or []
         used_cart_items: list[Cart] = []
 
@@ -143,29 +193,19 @@ class OrderService:
             if not cart_items:
                 raise ValueError("Cart is empty")
             used_cart_items = list(cart_items)
-            items_spec = [
-                (item.book_id, item.quantity or 1)
-                for item in cart_items
-                if item.book_id is not None
-            ]
+            items_spec = [(item.book_id, item.quantity or 1) for item in cart_items if item.book_id is not None]
             order_items_data, subtotal = await self._build_order_items(db, user_id, items_spec)
 
-        # Áp dụng promotion
         discount_amount = 0.0
         promotion_id = None
         if checkout_in.promotion_code:
-            promo, discount_amount, err = await promotion_service.validate_code(
-                db, checkout_in.promotion_code, subtotal
-            )
+            promo, discount_amount, err = await promotion_service.validate_code(db, checkout_in.promotion_code, subtotal)
             if err:
                 raise ValueError(err)
             if promo:
                 promotion_id = promo.id
 
-        # Lấy service (shipping)
-        result = await db.execute(
-            select(Service).where(Service.deleted_at.is_(None)).limit(1)
-        )
+        result = await db.execute(select(Service).where(Service.deleted_at.is_(None)).limit(1))
         service = result.scalars().first()
         if not service:
             service = Service(name_service="Standard delivery", price=0, status=True)
@@ -175,16 +215,10 @@ class OrderService:
 
         total = max(0.0, subtotal - discount_amount + shipping_fee)
 
-        # Tạo payment
-        payment = Payment(
-            amount=total,
-            method=PaymentMethod.COD,
-            payment_status="PENDING",
-        )
+        payment = Payment(amount=total, method=PaymentMethod.COD, payment_status="PENDING")
         db.add(payment)
         await db.flush()
 
-        # Tạo order
         address_parts = [
             (checkout_in.shipping_address or "").strip(),
             (checkout_in.ward or "").strip(),
@@ -206,31 +240,24 @@ class OrderService:
         db.add(order)
         await db.flush()
 
-        # Order items
         for book_id, qty, price in order_items_data:
-            oi = OrderItem(order_id=order.id, book_id=book_id, quantity=qty, price=price)
-            db.add(oi)
-            # Trừ tồn kho
+            db.add(OrderItem(order_id=order.id, book_id=book_id, quantity=qty, price=price))
             book = await db.get(Book, book_id)
             if book:
                 book.stock_quantity = (book.stock_quantity or 0) - qty
 
-        # Order promotion
         if promotion_id:
-            op = OrderPromotion(
-                order_id=order.id,
-                promotion_id=promotion_id,
-                discount_amount=discount_amount,
-            )
-            db.add(op)
+            db.add(OrderPromotion(order_id=order.id, promotion_id=promotion_id, discount_amount=discount_amount))
 
-        # Hard delete cart items nếu checkout từ giỏ (đã chuyển sang order)
         for item in used_cart_items:
             await db.delete(item)
 
+        self._add_history(db, order.id, "PENDING", "Đơn hàng mới")
         await db.flush()
         await db.refresh(order)
         return order, subtotal, discount_amount, shipping_fee, total
+
+    # ── update status (admin) ────────────────────────────────
 
     async def update_status(
         self,
@@ -238,37 +265,53 @@ class OrderService:
         order_id: int,
         new_status: str,
         admin_id: Optional[int] = None,
+        description: Optional[str] = None,
     ) -> Optional[Order]:
-        """Cập nhật trạng thái đơn (admin). Ghi lịch sử."""
-        valid = {"PENDING", "CONFIRMED", "INPROGRESS", "SHIPPED", "DELIVERED", "COMPLETED", "CANCELLED", "RETURNED"}
-        if new_status not in valid:
+        if new_status not in VALID_STATUSES:
             return None
         order = await self.repository.get(db, order_id)
         if not order:
             return None
-        old_status = order.status
         order.status = new_status
-
-        # Map order status to history enum
-        status_map = {
-            "CANCELLED": OrderHistoryStatus.CANCELLED,
-            "COMPLETED": OrderHistoryStatus.COMPLETED,
-            "DELIVERED": OrderHistoryStatus.DELIVERED,
-            "PENDING": OrderHistoryStatus.PENDING,
-            "PROCESSING": OrderHistoryStatus.PROCESSING,
-            "RETURNED": OrderHistoryStatus.RETURNED,
-            "SHIPPED": OrderHistoryStatus.SHIPPED,
-        }
-        hist_status = status_map.get(new_status, OrderHistoryStatus.PENDING)
-        hist = OrderStatusHistory(
-            order_id=order_id,
-            e_order_history=hist_status,
-            status_change_date=datetime.utcnow(),
-        )
-        db.add(hist)
+        self._add_history(db, order_id, new_status, description)
         await db.flush()
         await db.refresh(order)
         return order
+
+    # ── cancel / request cancel (user) ───────────────────────
+
+    async def cancel_or_request_cancel(
+        self,
+        db: AsyncSession,
+        order_id: int,
+        user_id: int,
+        reason: Optional[str] = None,
+    ) -> Tuple[Order, str]:
+        """Hủy đơn hoặc gửi yêu cầu hủy. Trả về (order, action)."""
+        order = await self.repository.get_with_items(db, order_id)
+        if not order or order.user_id != user_id:
+            raise ValueError("Order not found")
+
+        current = str(order.status).replace("OrderStatus.", "")
+        terminal = {"CANCELLED", "COMPLETED", "DELIVERED", "RETURNED", "CANCEL_REQUESTED"}
+        if current in terminal:
+            raise ValueError(f"Không thể hủy đơn ở trạng thái {current}")
+
+        now = datetime.utcnow()
+        elapsed = (now - order.order_date).total_seconds() if order.order_date else float("inf")
+
+        if current in ("PENDING", "CONFIRMED") and elapsed <= AUTO_CONFIRM_SECONDS:
+            order.status = "CANCELLED"
+            self._add_history(db, order.id, "CANCELLED", reason or "Người dùng hủy đơn")
+            await db.flush()
+            await db.refresh(order)
+            return order, "cancelled"
+
+        order.status = "CANCEL_REQUESTED"
+        self._add_history(db, order.id, "CANCEL_REQUESTED", reason or "Yêu cầu hủy đơn")
+        await db.flush()
+        await db.refresh(order)
+        return order, "cancel_requested"
 
 
 order_service = OrderService()

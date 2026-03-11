@@ -60,7 +60,30 @@ class OrderUpdate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: str  # PENDING, CONFIRMED, INPROGRESS, SHIPPED, DELIVERED, COMPLETED, CANCELLED, RETURNED
+    status: str
+    description: Optional[str] = None
+
+
+class CancelOrderRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class OrderStatusHistoryOut(BaseModel):
+    id: int
+    status: Optional[str] = None
+    status_change_date: Optional[datetime] = None
+    description: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_model(cls, obj) -> "OrderStatusHistoryOut":
+        return cls(
+            id=obj.id,
+            status=obj.e_order_history.value if obj.e_order_history else None,
+            status_change_date=obj.status_change_date,
+            description=getattr(obj, "description", None),
+        )
 
 
 class Order(OrderBase):
@@ -76,6 +99,7 @@ class Order(OrderBase):
 
 class OrderWithItems(Order):
     order_items: List[OrderItem] = []
+    status_history: List[OrderStatusHistoryOut] = []
 
 
 class OrderCheckoutOut(BaseModel):

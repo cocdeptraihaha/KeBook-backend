@@ -1,14 +1,17 @@
 """OrderStatusHistory model."""
 import enum
-from sqlalchemy import Column, Integer, DateTime, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, String, Enum as SQLEnum, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class OrderHistoryStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
     COMPLETED = "COMPLETED"
+    CONFIRMED = "CONFIRMED"
     DELIVERED = "DELIVERED"
+    INPROGRESS = "INPROGRESS"
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     RETURNED = "RETURNED"
@@ -23,6 +26,7 @@ class OrderStatusHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     e_order_history = Column(SQLEnum(OrderHistoryStatus), nullable=True)
     status_change_date = Column(DateTime, nullable=True)
+    description = Column(String(500), nullable=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
 
     order = relationship("Order", back_populates="status_history")

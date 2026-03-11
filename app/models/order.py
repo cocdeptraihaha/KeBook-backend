@@ -7,11 +7,14 @@ from app.core.database import Base
 
 class OrderStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
     COMPLETED = "COMPLETED"
     CONFIRMED = "CONFIRMED"
+    DELIVERED = "DELIVERED"
     INPROGRESS = "INPROGRESS"
     PENDING = "PENDING"
     RETURNED = "RETURNED"
+    SHIPPED = "SHIPPED"
 
 
 class Order(Base):
