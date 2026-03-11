@@ -16,6 +16,7 @@ class OrderItemCreate(OrderItemBase):
 
 class OrderItem(OrderItemBase):
     id: int
+    book_title: Optional[str] = None
     order_id: Optional[int] = None
     deleted_at: Optional[datetime] = None
 
@@ -43,6 +44,7 @@ class CheckoutItemIn(BaseModel):
 
 class CheckoutRequest(BaseModel):
     """Checkout từ giỏ hàng hoặc danh sách items cụ thể."""
+    full_name: Optional[str] = None
     note: Optional[str] = None
     phone_number: Optional[str] = None
     shipping_address: Optional[str] = None
@@ -88,6 +90,7 @@ class OrderStatusHistoryOut(BaseModel):
 
 class Order(OrderBase):
     id: int
+    full_name: Optional[str] = None
     order_date: Optional[datetime] = None
     status: Optional[str] = None
     total_price: Optional[float] = None

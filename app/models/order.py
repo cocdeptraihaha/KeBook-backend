@@ -23,6 +23,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String(255), nullable=True)
     note = Column(String(255), nullable=True)
     order_date = Column(DateTime, nullable=True)
     phone_number = Column(String(255), nullable=True)

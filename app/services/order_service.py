@@ -13,6 +13,8 @@ from app.models.payment import Payment, PaymentMethod
 from app.models.service import Service
 from app.models.cart import Cart
 from app.models.book import Book
+from app.models.user import User
+from app.models.user_promotion import UserPromotion
 from app.schemas.book import BookDiscountOut, _pick_active_discount
 from app.schemas.order import OrderCreate, CheckoutRequest
 from app.repositories.order_repository import order_repository
@@ -147,7 +149,8 @@ class OrderService:
         db: AsyncSession,
         user_id: int,
         items_spec: Iterable[Tuple[int, int]],
-    ) -> Tuple[list[tuple[int, int, float]], float]:
+    ) -> Tuple[list[tuple[int, int, float, str]], float]:
+        """Returns [(book_id, qty, price, book_title), ...] and subtotal."""
         book_ids = {book_id for book_id, _ in items_spec}
         if not book_ids:
             raise ValueError("No items to checkout")
@@ -158,7 +161,7 @@ class OrderService:
         books_by_id: dict[int, Book] = {b.id: b for b in result_books.scalars().all()}
 
         subtotal = 0.0
-        order_items_data: list[tuple[int, int, float]] = []
+        order_items_data: list[tuple[int, int, float, str]] = []
         for book_id, qty in items_spec:
             if qty <= 0:
                 raise ValueError("Quantity must be positive")
@@ -172,7 +175,7 @@ class OrderService:
             if (book.stock_quantity or 0) < qty:
                 raise ValueError(f"Book '{book.title}' insufficient stock")
             subtotal += price * qty
-            order_items_data.append((book_id, qty, price))
+            order_items_data.append((book_id, qty, price, book.title or ""))
         return order_items_data, subtotal
 
     # ── checkout ─────────────────────────────────────────────
@@ -188,6 +191,9 @@ class OrderService:
             if not items_spec:
                 raise ValueError("No valid items to checkout")
             order_items_data, subtotal = await self._build_order_items(db, user_id, items_spec)
+            checkout_book_ids = {bid for bid, _ in items_spec}
+            cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
+            used_cart_items = [ci for ci in cart_items if ci.book_id in checkout_book_ids]
         else:
             cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
             if not cart_items:
@@ -203,7 +209,22 @@ class OrderService:
             if err:
                 raise ValueError(err)
             if promo:
+                already_used = await db.execute(
+                    select(UserPromotion).where(
+                        UserPromotion.user_id == user_id,
+                        UserPromotion.promotion_id == promo.id,
+                    )
+                )
+                if already_used.scalars().first():
+                    raise ValueError("Bạn đã sử dụng mã giảm giá này rồi")
                 promotion_id = promo.id
+
+        if checkout_in.full_name and checkout_in.full_name.strip():
+            user_full_name = checkout_in.full_name.strip()
+        else:
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalars().first()
+            user_full_name = (user.full_name if user else None) or None
 
         result = await db.execute(select(Service).where(Service.deleted_at.is_(None)).limit(1))
         service = result.scalars().first()
@@ -228,6 +249,7 @@ class OrderService:
 
         order = Order(
             user_id=user_id,
+            full_name=user_full_name,
             payment_id=payment.id,
             service_id=service.id,
             note=checkout_in.note,
@@ -240,14 +262,25 @@ class OrderService:
         db.add(order)
         await db.flush()
 
-        for book_id, qty, price in order_items_data:
-            db.add(OrderItem(order_id=order.id, book_id=book_id, quantity=qty, price=price))
-            book = await db.get(Book, book_id)
+        result_books = await db.execute(
+            select(Book).where(Book.id.in_([bid for bid, _, _, _ in order_items_data]))
+        )
+        books_map = {b.id: b for b in result_books.scalars().all()}
+        for book_id, qty, price, title in order_items_data:
+            db.add(OrderItem(
+                order_id=order.id, book_id=book_id, quantity=qty,
+                price=price, book_title=title,
+            ))
+            book = books_map.get(book_id)
             if book:
                 book.stock_quantity = (book.stock_quantity or 0) - qty
 
         if promotion_id:
             db.add(OrderPromotion(order_id=order.id, promotion_id=promotion_id, discount_amount=discount_amount))
+            db.add(UserPromotion(
+                user_id=user_id, promotion_id=promotion_id,
+                order_id=order.id, used_at=datetime.utcnow(),
+            ))
 
         for item in used_cart_items:
             await db.delete(item)

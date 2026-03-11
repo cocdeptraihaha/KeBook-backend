@@ -1,5 +1,5 @@
 """OrderItem model."""
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,6 +10,7 @@ class OrderItem(Base):
     __tablename__ = "order_items"
 
     id = Column(Integer, primary_key=True, index=True)
+    book_title = Column(String(255), nullable=True)
     price = Column(Float, nullable=False)
     quantity = Column(Integer, nullable=False)
     book_id = Column(Integer, ForeignKey("books.id"), nullable=True)

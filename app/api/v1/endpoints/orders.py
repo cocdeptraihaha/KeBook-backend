@@ -163,6 +163,7 @@ def _serialize_order_with_items(order) -> OrderWithItems:
                     "id": oi.id,
                     "order_id": oi.order_id,
                     "book_id": oi.book_id,
+                    "book_title": oi.book_title,
                     "quantity": oi.quantity,
                     "price": float(oi.price or 0),
                     "deleted_at": oi.deleted_at,

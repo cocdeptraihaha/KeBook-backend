@@ -20,6 +20,7 @@ from app.models.review import Review
 from app.models.notification import Notification
 from app.models.user_notification import UserNotification
 from app.models.support_request import SupportRequest
+from app.models.user_promotion import UserPromotion
 
 __all__ = [
     "User",
@@ -48,4 +49,5 @@ __all__ = [
     "Notification",
     "UserNotification",
     "SupportRequest",
+    "UserPromotion",
 ]
