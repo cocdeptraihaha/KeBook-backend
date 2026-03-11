@@ -36,14 +36,20 @@ class OrderCreate(OrderBase):
     promotion_code: Optional[str] = None
 
 
+class CheckoutItemIn(BaseModel):
+    book_id: int
+    quantity: int = 1
+
+
 class CheckoutRequest(BaseModel):
-    """Checkout từ giỏ hàng."""
+    """Checkout từ giỏ hàng hoặc danh sách items cụ thể."""
     note: Optional[str] = None
     phone_number: Optional[str] = None
     shipping_address: Optional[str] = None
     province: Optional[str] = None
     ward: Optional[str] = None
     promotion_code: Optional[str] = None
+    items: Optional[List[CheckoutItemIn]] = None
 
 
 class OrderUpdate(BaseModel):

@@ -1,6 +1,6 @@
 """Order service."""
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Iterable, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -87,42 +87,68 @@ class OrderService:
             return None
         return order
 
-    async def checkout_from_cart(
-        self, db: AsyncSession, user_id: int, checkout_in: CheckoutRequest
-    ):
-        """Tạo đơn hàng từ giỏ hàng. Trả về (order, item_amount, discount_total, shipping_fee, total_amount)."""
-        cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
-        if not cart_items:
-            raise ValueError("Cart is empty")
+    async def _build_order_items(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        items_spec: Iterable[Tuple[int, int]],
+    ) -> Tuple[list[tuple[int, int, float]], float]:
+        """
+        Từ danh sách (book_id, quantity) tính ra (book_id, quantity, unit_price) và subtotal.
+        """
+        book_ids = {book_id for book_id, _ in items_spec}
+        if not book_ids:
+            raise ValueError("No items to checkout")
 
-        # Preload all books with discounts to tránh lazy-load trong async (MissingGreenlet)
-        book_ids = {item.book_id for item in cart_items if item.book_id is not None}
-        books_by_id: dict[int, Book] = {}
-        if book_ids:
-            result_books = await db.execute(
-                select(Book)
-                .options(selectinload(Book.discounts))
-                .where(Book.id.in_(book_ids))
-            )
-            books_by_id = {b.id: b for b in result_books.scalars().all()}
+        result_books = await db.execute(
+            select(Book)
+            .options(selectinload(Book.discounts))
+            .where(Book.id.in_(book_ids))
+        )
+        books_by_id: dict[int, Book] = {b.id: b for b in result_books.scalars().all()}
 
-        # Lấy giá sách, tính tổng, kiểm tra tồn kho
         subtotal = 0.0
-        order_items_data = []
-        for item in cart_items:
-            book = books_by_id.get(item.book_id) if item.book_id is not None else None
+        order_items_data: list[tuple[int, int, float]] = []
+        for book_id, qty in items_spec:
+            if qty <= 0:
+                raise ValueError("Quantity must be positive")
+            book = books_by_id.get(book_id)
             if not book or book.deleted_at is not None:
-                raise ValueError(f"Book id={item.book_id} not found")
+                raise ValueError(f"Book id={book_id} not found")
             original_price = book.selling_price or 0
-            # Compute per-book active discount (if any) and use final price for checkout
             discounts = [BookDiscountOut.model_validate(d) for d in (book.discounts or [])]
             _, discount_amt = _pick_active_discount(discounts, original_price)
             price = max(0.0, original_price - discount_amt)
-            qty = item.quantity or 1
             if (book.stock_quantity or 0) < qty:
                 raise ValueError(f"Book '{book.title}' insufficient stock")
             subtotal += price * qty
-            order_items_data.append((item.book_id, qty, price))
+            order_items_data.append((book_id, qty, price))
+        return order_items_data, subtotal
+
+    async def checkout_from_cart(
+        self, db: AsyncSession, user_id: int, checkout_in: CheckoutRequest
+    ):
+        """Tạo đơn hàng từ giỏ hàng hoặc danh sách items cụ thể. Trả về (order, item_amount, discount_total, shipping_fee, total_amount)."""
+        # Nếu client gửi danh sách items cụ thể thì ưu tiên dùng danh sách đó
+        explicit_items = checkout_in.items or []
+        used_cart_items: list[Cart] = []
+
+        if explicit_items:
+            items_spec = [(it.book_id, it.quantity) for it in explicit_items if it.book_id]
+            if not items_spec:
+                raise ValueError("No valid items to checkout")
+            order_items_data, subtotal = await self._build_order_items(db, user_id, items_spec)
+        else:
+            cart_items = await cart_repository.get_by_user(db, user_id, limit=500)
+            if not cart_items:
+                raise ValueError("Cart is empty")
+            used_cart_items = list(cart_items)
+            items_spec = [
+                (item.book_id, item.quantity or 1)
+                for item in cart_items
+                if item.book_id is not None
+            ]
+            order_items_data, subtotal = await self._build_order_items(db, user_id, items_spec)
 
         # Áp dụng promotion
         discount_amount = 0.0
@@ -198,8 +224,8 @@ class OrderService:
             )
             db.add(op)
 
-        # Hard delete cart items (đã chuyển sang order)
-        for item in cart_items:
+        # Hard delete cart items nếu checkout từ giỏ (đã chuyển sang order)
+        for item in used_cart_items:
             await db.delete(item)
 
         await db.flush()
