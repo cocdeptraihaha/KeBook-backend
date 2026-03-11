@@ -12,6 +12,7 @@ from app.models.book import Book
 from app.models.book_category import BookCategory
 from app.models.book_detail import BookDetail
 from app.models.book_discount import BookDiscount
+from app.models.book_book_discount import BookBookDiscount
 from app.models.order_item import OrderItem
 from app.models.category import Category
 from app.models.user import User
@@ -128,18 +129,18 @@ async def top_discounted_books(
 
     disc_subq = (
         select(
-            BookDiscount.book_id.label("book_id"),
+            BookBookDiscount.book_id.label("book_id"),
             func.max(amount_expr).label("best_discount"),
         )
-        .join(Book, Book.id == BookDiscount.book_id)
+        .join(BookDiscount, BookDiscount.id == BookBookDiscount.discount_id)
+        .join(Book, Book.id == BookBookDiscount.book_id)
         .where(
             Book.deleted_at.is_(None),
-            BookDiscount.book_id.is_not(None),
             # active discount window
             func.coalesce(BookDiscount.start_date, now) <= now,
             func.coalesce(BookDiscount.end_date, now) >= now,
         )
-        .group_by(BookDiscount.book_id)
+        .group_by(BookBookDiscount.book_id)
         .subquery()
     )
 

@@ -22,7 +22,11 @@ class Book(Base):
     deleted_at = Column(DateTime, nullable=True)
 
     book_detail = relationship("BookDetail", back_populates="book")
-    discounts = relationship("BookDiscount", back_populates="book")
+    discounts = relationship(
+        "BookDiscount",
+        secondary="book_book_discount",
+        back_populates="books",
+    )
     cart_items = relationship("Cart", back_populates="book")
     order_items = relationship("OrderItem", back_populates="book")
     reviews = relationship("Review", back_populates="book")

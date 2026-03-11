@@ -4,6 +4,7 @@ from app.models.otp import OTP, OTPType
 from app.models.book_detail import BookDetail
 from app.models.book import Book
 from app.models.book_discount import BookDiscount
+from app.models.book_book_discount import BookBookDiscount
 from app.models.book_category import BookCategory
 from app.models.category import Category
 from app.models.payment import Payment, PaymentMethod
@@ -27,6 +28,7 @@ __all__ = [
     "BookDetail",
     "Book",
     "BookDiscount",
+    "BookBookDiscount",
     "BookCategory",
     "Category",
     "Payment",
