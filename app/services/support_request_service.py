@@ -32,6 +32,14 @@ class SupportRequestService:
         db.add(req)
         await db.flush()
         await db.refresh(req)
+        try:
+            from app.services.notification_service import notification_service
+
+            await notification_service.notify_admins_new_support(db, req.id)
+        except Exception:
+            import logging
+
+            logging.exception("notify_admins_new_support failed")
         return req
 
     async def get_all(

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.review import Review
 from app.schemas.review import EligibilityResponse, ReviewCreate, ReviewUpdate
 from app.repositories.review_repository import review_repository
+from app.services.points_service import points_service
 
 
 class ReviewService:
@@ -32,6 +33,23 @@ class ReviewService:
         data["user_id"] = user_id
         data["create_at"] = datetime.utcnow()
         review = await self.repository.create(db, ReviewCreate(**data))
+        try:
+            await points_service.award_for_new_review(db, user_id, review.id)
+        except Exception:
+            # Không làm hỏng luồng review nếu cộng điểm lỗi (log server)
+            import logging
+
+            logging.exception("award_for_new_review failed")
+        try:
+            from app.services.notification_service import notification_service
+
+            await notification_service.notify_admins_new_review(
+                db, review_in.book_id, review.id
+            )
+        except Exception:
+            import logging
+
+            logging.exception("notify_admins_new_review failed")
         return review
 
     async def get_by_book(
