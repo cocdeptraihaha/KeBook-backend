@@ -19,6 +19,7 @@ import os
 from fastapi_pagination import add_pagination
 
 from app.api.v1.router import api_router
+from app.api.ws_notifications import router as ws_notifications_router
 from app.core.database import database, AsyncSessionLocal
 from app.services.otp_service import otp_service
 
@@ -82,6 +83,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(ws_notifications_router, prefix="/api/v1")
 add_pagination(app)
 
 

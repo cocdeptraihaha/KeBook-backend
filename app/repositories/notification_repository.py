@@ -1,6 +1,8 @@
 """Notification repository."""
+from datetime import datetime
 from typing import List
-from sqlalchemy import select
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,7 +52,6 @@ class UserNotificationRepository:
     async def mark_read(
         self, db: AsyncSession, notification_id: int, user_id: int
     ) -> bool:
-        from datetime import datetime
         result = await db.execute(
             select(UserNotification).where(
                 UserNotification.notification_id == notification_id,
@@ -64,6 +65,44 @@ class UserNotificationRepository:
         un.read_at = datetime.utcnow()
         await db.flush()
         return True
+
+    async def count_unread(self, db: AsyncSession, user_id: int) -> int:
+        result = await db.execute(
+            select(func.count())
+            .select_from(UserNotification)
+            .join(Notification, UserNotification.notification_id == Notification.id)
+            .where(
+                UserNotification.user_id == user_id,
+                Notification.deleted_at.is_(None),  # noqa: E712
+                or_(
+                    UserNotification.is_read.is_(None),
+                    UserNotification.is_read.is_(False),
+                ),
+            )
+        )
+        return int(result.scalar() or 0)
+
+    async def mark_all_read_for_user(self, db: AsyncSession, user_id: int) -> int:
+        """Đánh dấu đã đọc mọi thông báo còn unread của user. Trả số bản ghi cập nhật."""
+        result = await db.execute(
+            select(UserNotification)
+            .join(Notification, UserNotification.notification_id == Notification.id)
+            .where(
+                UserNotification.user_id == user_id,
+                Notification.deleted_at.is_(None),  # noqa: E712
+                or_(
+                    UserNotification.is_read.is_(None),
+                    UserNotification.is_read.is_(False),
+                ),
+            )
+        )
+        rows = list(result.scalars().all())
+        now = datetime.utcnow()
+        for un in rows:
+            un.is_read = True
+            un.read_at = now
+        await db.flush()
+        return len(rows)
 
 
 notification_repository = NotificationRepository(Notification)

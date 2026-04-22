@@ -11,6 +11,26 @@ from app.services.notification_service import notification_service
 router = APIRouter()
 
 
+@router.get("/me/unread-count")
+async def get_my_unread_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Số thông báo chưa đọc."""
+    count = await notification_service.get_unread_count(db, current_user.id)
+    return {"count": count}
+
+
+@router.post("/me/read-all")
+async def mark_all_my_notifications_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Đánh dấu tất cả thông báo của user là đã đọc."""
+    n = await notification_service.mark_all_read(db, current_user.id)
+    return {"updated": n}
+
+
 @router.get("/me")
 async def get_my_notifications(
     skip: int = Query(0, ge=0),
