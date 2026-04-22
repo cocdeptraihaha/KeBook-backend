@@ -1,7 +1,7 @@
 """Order service."""
 from datetime import datetime
 from typing import List, Optional, Iterable, Tuple
-from sqlalchemy import select
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -77,6 +77,11 @@ class OrderService:
         self._add_history(db, order.id, "CONFIRMED", "Tự động xác nhận sau 30 phút")
         await db.flush()
         await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        await notification_service.notify_order_status_for_buyer(
+            db, order.user_id, order.id, "CONFIRMED"
+        )
         return order
 
     # ── CRUD ─────────────────────────────────────────────────
@@ -115,12 +120,24 @@ class OrderService:
         self._add_history(db, order.id, "PENDING", "Đơn hàng mới")
         await db.flush()
         await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        await notification_service.notify_checkout_placed_for_buyer(db, user_id, order.id)
+        await notification_service.notify_admins_new_order(db, order.id)
         return order
 
     async def get_user_orders(
-        self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100, status: Optional[str] = None
+        self,
+        db: AsyncSession,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        statuses: Optional[List[str]] = None,
     ) -> List[Order]:
-        orders = await self.repository.get_by_user(db, user_id, skip, limit, status=status)
+        orders = await self.repository.get_by_user(
+            db, user_id, skip, limit, status=status, statuses=statuses
+        )
         for o in orders:
             await self.auto_confirm_if_needed(db, o)
         return orders
@@ -205,14 +222,19 @@ class OrderService:
         discount_amount = 0.0
         promotion_id = None
         if checkout_in.promotion_code:
-            promo, discount_amount, err = await promotion_service.validate_code(db, checkout_in.promotion_code, subtotal)
+            promo, discount_amount, err = await promotion_service.validate_code(
+                db, checkout_in.promotion_code, subtotal, user_id=user_id
+            )
             if err:
                 raise ValueError(err)
             if promo:
                 already_used = await db.execute(
                     select(UserPromotion).where(
-                        UserPromotion.user_id == user_id,
-                        UserPromotion.promotion_id == promo.id,
+                        and_(
+                            UserPromotion.user_id == user_id,
+                            UserPromotion.promotion_id == promo.id,
+                            UserPromotion.order_id.is_not(None),
+                        )
                     )
                 )
                 if already_used.scalars().first():
@@ -288,6 +310,10 @@ class OrderService:
         self._add_history(db, order.id, "PENDING", "Đơn hàng mới")
         await db.flush()
         await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        await notification_service.notify_checkout_placed_for_buyer(db, user_id, order.id)
+        await notification_service.notify_admins_new_order(db, order.id)
         return order, subtotal, discount_amount, shipping_fee, total
 
     # ── update status (admin) ────────────────────────────────
@@ -309,6 +335,12 @@ class OrderService:
         self._add_history(db, order_id, new_status, description)
         await db.flush()
         await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        raw = str(new_status).replace("OrderStatus.", "")
+        await notification_service.notify_order_status_for_buyer(
+            db, order.user_id, order.id, raw
+        )
         return order
 
     # ── cancel / request cancel (user) ───────────────────────
@@ -338,13 +370,81 @@ class OrderService:
             self._add_history(db, order.id, "CANCELLED", reason or "Người dùng hủy đơn")
             await db.flush()
             await db.refresh(order)
+            from app.services.notification_service import notification_service
+
+            await notification_service.notify_order_status_for_buyer(
+                db, order.user_id, order.id, "CANCELLED"
+            )
             return order, "cancelled"
 
         order.status = "CANCEL_REQUESTED"
         self._add_history(db, order.id, "CANCEL_REQUESTED", reason or "Yêu cầu hủy đơn")
         await db.flush()
         await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        await notification_service.notify_order_status_for_buyer(
+            db, order.user_id, order.id, "CANCEL_REQUESTED"
+        )
         return order, "cancel_requested"
+
+    async def get_user_money_stats(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+    ):
+        """Gom nhóm tiền + số đơn theo bucket trạng thái (cho user)."""
+        from app.schemas.order import MoneyBucket, OrderMoneyStats
+
+        stmt = (
+            select(Order.status, func.count(Order.id), func.coalesce(func.sum(Order.total_price), 0.0))
+            .where(
+                Order.user_id == user_id,
+                Order.deleted_at.is_(None),
+            )
+        )
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+        stmt = stmt.group_by(Order.status)
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        def norm_status(cell) -> str:
+            if cell is None:
+                return ""
+            r = str(cell)
+            return r.split(".")[-1] if "." in r else r
+
+        per: dict[str, tuple[int, float]] = {}
+        for status_cell, cnt, total in rows:
+            key = norm_status(status_cell)
+            per[key] = (int(cnt), float(total or 0))
+
+        def bucket(status_keys: List[str]) -> tuple[int, float]:
+            c, t = 0, 0.0
+            for s in status_keys:
+                if s in per:
+                    cc, tt = per[s]
+                    c += cc
+                    t += tt
+            return c, t
+
+        pc = bucket(["PENDING", "CONFIRMED"])
+        sh = bucket(["INPROGRESS", "SHIPPED"])
+        dv = bucket(["DELIVERED", "COMPLETED"])
+        cx = bucket(["CANCELLED", "CANCEL_REQUESTED", "RETURNED"])
+
+        return OrderMoneyStats(
+            pending_confirm=MoneyBucket(count=pc[0], total=pc[1]),
+            shipping=MoneyBucket(count=sh[0], total=sh[1]),
+            delivered=MoneyBucket(count=dv[0], total=dv[1]),
+            cancelled=MoneyBucket(count=cx[0], total=cx[1]),
+            total_spent=float(dv[1]),
+        )
 
 
 order_service = OrderService()

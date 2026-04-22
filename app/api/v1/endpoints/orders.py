@@ -1,4 +1,7 @@
 """Order endpoints - đơn hàng."""
+from datetime import date, datetime, time
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +17,7 @@ from app.schemas.order import (
     OrderStatusUpdate,
     OrderCheckoutOut,
     CancelOrderRequest,
+    OrderMoneyStats,
 )
 from app.services.order_service import order_service
 
@@ -27,12 +31,35 @@ async def get_my_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     status_filter: str = Query(None, alias="status"),
+    status_in: Optional[str] = Query(
+        None,
+        description="Nhiều trạng thái, cách nhau bởi dấu phẩy (vd. PENDING,CONFIRMED)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Lấy đơn hàng của user, có thể lọc theo ?status=PENDING."""
+    """Lấy đơn hàng của user; ?status= hoặc ?status_in=PENDING,CONFIRMED."""
+    statuses_list = None
+    if status_in and status_in.strip():
+        statuses_list = [s.strip().upper() for s in status_in.split(",") if s.strip()]
+    use_status = None if statuses_list else status_filter
     return await order_service.get_user_orders(
-        db, current_user.id, skip, limit, status=status_filter
+        db, current_user.id, skip, limit, status=use_status, statuses=statuses_list
+    )
+
+
+@router.get("/me/stats", response_model=OrderMoneyStats)
+async def get_my_order_money_stats(
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Thống kê tiền / số đơn theo nhóm trạng thái (theo ngày đặt hàng nếu có from/to)."""
+    from_dt = datetime.combine(from_d, time.min) if from_d else None
+    to_dt = datetime.combine(to_d, time.max) if to_d else None
+    return await order_service.get_user_money_stats(
+        db, current_user.id, from_dt=from_dt, to_dt=to_dt
     )
 
 

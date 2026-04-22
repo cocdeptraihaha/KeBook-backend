@@ -111,3 +111,18 @@ class OrderCheckoutOut(BaseModel):
     discount_total: float
     shipping_fee: float
     total_amount: float
+
+
+class MoneyBucket(BaseModel):
+    count: int
+    total: float
+
+
+class OrderMoneyStats(BaseModel):
+    """Thống kê dòng tiền đơn hàng theo nhóm trạng thái (user)."""
+
+    pending_confirm: MoneyBucket
+    shipping: MoneyBucket
+    delivered: MoneyBucket
+    cancelled: MoneyBucket
+    total_spent: float  # chỉ nhóm đã giao (DELIVERED + COMPLETED)

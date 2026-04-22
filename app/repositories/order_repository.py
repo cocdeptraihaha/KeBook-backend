@@ -1,10 +1,11 @@
 """Order repository."""
 from typing import List, Optional
+
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.order import Order
+from app.models.order import Order, OrderStatus
 from app.schemas.order import OrderCreate, OrderUpdate
 from app.repositories.base_repository import BaseRepository
 
@@ -31,8 +32,9 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         skip: int = 0,
         limit: int = 100,
         status: Optional[str] = None,
+        statuses: Optional[List[str]] = None,
     ) -> List[Order]:
-        """Lấy đơn hàng của user (chưa xóa), có thể lọc theo status."""
+        """Lấy đơn hàng của user (chưa xóa), có thể lọc theo status hoặc nhiều status."""
         stmt = (
             select(Order)
             .where(
@@ -40,7 +42,15 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 Order.deleted_at.is_(None),
             )
         )
-        if status:
+        if statuses:
+            enums: List[OrderStatus] = []
+            for s in statuses:
+                key = (s or "").strip().upper()
+                if key in OrderStatus.__members__:
+                    enums.append(OrderStatus[key])
+            if enums:
+                stmt = stmt.where(Order.status.in_(enums))
+        elif status:
             stmt = stmt.where(Order.status == status)
         stmt = stmt.order_by(Order.order_date.desc()).offset(skip).limit(limit)
         result = await db.execute(stmt)
