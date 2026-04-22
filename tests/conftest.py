@@ -1,10 +1,19 @@
 """Pytest fixtures cho API tests."""
 import os
+from pathlib import Path
 
 # Set test env TRƯỚC khi import app
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["TESTING"] = "1"
+
+# Xóa SQLite test cũ để create_all tạo lại schema (cột/bảng mới)
+_test_db_path = Path(__file__).resolve().parent.parent / "test.db"
+if _test_db_path.exists():
+    try:
+        _test_db_path.unlink()
+    except OSError:
+        pass
 
 # Clear settings cache
 import app.core.config as config_module

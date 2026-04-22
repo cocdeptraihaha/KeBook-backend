@@ -30,3 +30,5 @@ class Book(Base):
     cart_items = relationship("Cart", back_populates="book")
     order_items = relationship("OrderItem", back_populates="book")
     reviews = relationship("Review", back_populates="book")
+    favorites = relationship("Favorite", back_populates="book")
+    book_views = relationship("BookView", back_populates="book")

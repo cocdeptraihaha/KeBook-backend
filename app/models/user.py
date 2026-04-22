@@ -29,8 +29,14 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    loyalty_points = Column(Integer, nullable=False, default=0)
 
     # Relationships
     cart_items = relationship("Cart", back_populates="user", foreign_keys="Cart.user_id")
     orders = relationship("Order", back_populates="user", foreign_keys="Order.user_id")
     reviews = relationship("Review", back_populates="user", foreign_keys="Review.user_id")
+    point_transactions = relationship(
+        "PointTransaction", back_populates="user", foreign_keys="PointTransaction.user_id"
+    )
+    favorites = relationship("Favorite", back_populates="user", foreign_keys="Favorite.user_id")
+    book_views = relationship("BookView", back_populates="user", foreign_keys="BookView.user_id")

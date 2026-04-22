@@ -58,6 +58,7 @@ class User(UserBase):
     id: int
     is_active: bool = False
     is_superuser: bool = False
+    loyalty_points: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

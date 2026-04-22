@@ -1,5 +1,5 @@
 """Promotion model."""
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,6 +10,7 @@ class Promotion(Base):
     __tablename__ = "promotion"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     code = Column(String(255), nullable=True)
     discount_percent = Column(Float, nullable=True)
     end_date = Column(DateTime, nullable=True)

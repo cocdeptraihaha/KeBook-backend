@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Cloudinary (upload ảnh). Format: cloudinary://api_key:api_secret@cloud_name
     CLOUDINARY_URL: str = ""
 
+    # Điểm tặng khi tạo đánh giá mới (không tặng khi sửa review)
+    REVIEW_REWARD_POINTS: int = 10
+
     class Config:
         env_file = ".env"
 

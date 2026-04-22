@@ -21,6 +21,10 @@ from app.models.notification import Notification
 from app.models.user_notification import UserNotification
 from app.models.support_request import SupportRequest
 from app.models.user_promotion import UserPromotion
+from app.models.point_transaction import PointTransaction
+from app.models.favorite import Favorite
+from app.models.book_view import BookView
+from app.models.point_reward import PointReward
 
 __all__ = [
     "User",
@@ -50,4 +54,8 @@ __all__ = [
     "UserNotification",
     "SupportRequest",
     "UserPromotion",
+    "PointTransaction",
+    "Favorite",
+    "BookView",
+    "PointReward",
 ]

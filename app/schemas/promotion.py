@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 class PromotionBase(BaseModel):
+    owner_user_id: Optional[int] = None
     code: Optional[str] = None
     name: Optional[str] = None
     discount_percent: Optional[float] = None

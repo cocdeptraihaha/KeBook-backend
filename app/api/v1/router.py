@@ -12,6 +12,8 @@ from app.api.v1.endpoints import (
     orders,
     reviews,
     promotions,
+    favorites,
+    points,
     return_requests,
     notifications,
     support_requests,
@@ -31,6 +33,8 @@ api_router.include_router(cart.router, prefix="/cart", tags=["cart"])
 api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
 api_router.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
 api_router.include_router(promotions.router, prefix="/promotions", tags=["promotions"])
+api_router.include_router(favorites.router, prefix="/favorites", tags=["favorites"])
+api_router.include_router(points.router, prefix="/points", tags=["points"])
 api_router.include_router(return_requests.router, prefix="/return-requests", tags=["return-requests"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(support_requests.router, prefix="/support-requests", tags=["support-requests"])

@@ -161,3 +161,11 @@ class Book(BookBase):
 
 class BookWithDetail(Book):
     book_detail: Optional[BookDetail] = None
+
+
+class BookWithDetailOut(BookWithDetail):
+    """Chi tiết sách + thống kê (API)."""
+
+    buyer_count: int = 0
+    review_count: int = 0
+    view_count: int = 0

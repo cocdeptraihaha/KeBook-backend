@@ -9,7 +9,10 @@ from app.models.book_detail import BookDetail
 from app.models.book_category import BookCategory
 from app.models.book_discount import BookDiscount
 from app.models.book_book_discount import BookBookDiscount
+from app.models.book_view import BookView
 from app.models.order_item import OrderItem
+from app.models.order import Order, OrderStatus
+from app.models.review import Review
 from app.models.category import Category
 from app.schemas.book import BookCreate, BookUpdate, BookDetailCreate, BookDetailUpdate
 from app.repositories.base_repository import BaseRepository
@@ -166,6 +169,73 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_book_stats(
+        self, db: AsyncSession, book_id: int
+    ) -> tuple[int, int, int]:
+        """(buyer_count, review_count, view_count)."""
+        r_rev = await db.execute(
+            select(func.count(Review.id)).where(
+                Review.book_id == book_id,
+                Review.deleted_at.is_(None),
+            )
+        )
+        review_count = int(r_rev.scalar() or 0)
+        r_buy = await db.execute(
+            select(func.count(func.distinct(Order.user_id)))
+            .select_from(OrderItem)
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(
+                OrderItem.book_id == book_id,
+                OrderItem.deleted_at.is_(None),
+                Order.deleted_at.is_(None),
+                Order.status.in_((OrderStatus.DELIVERED, OrderStatus.COMPLETED)),
+            )
+        )
+        buyer_count = int(r_buy.scalar() or 0)
+        r_view = await db.execute(
+            select(func.count(BookView.id)).where(BookView.book_id == book_id)
+        )
+        view_count = int(r_view.scalar() or 0)
+        return buyer_count, review_count, view_count
+
+    async def get_similar_books(
+        self, db: AsyncSession, book_id: int, limit: int = 10
+    ) -> List[Book]:
+        r_cat = await db.execute(
+            select(BookCategory.category_id).where(BookCategory.book_id == book_id)
+        )
+        cat_ids = [row[0] for row in r_cat.all()]
+        if not cat_ids:
+            return []
+        r_ids = await db.execute(
+            select(Book.id)
+            .join(BookCategory, BookCategory.book_id == Book.id)
+            .where(
+                BookCategory.category_id.in_(cat_ids),
+                Book.id != book_id,
+                Book.deleted_at.is_(None),
+            )
+            .distinct()
+        )
+        ids = [row[0] for row in r_ids.all()]
+        if not ids:
+            return []
+        r_cnt = await db.execute(
+            select(BookView.book_id, func.count(BookView.id))
+            .where(BookView.book_id.in_(ids))
+            .group_by(BookView.book_id)
+        )
+        counts = {bid: int(c) for bid, c in r_cnt.all()}
+        ids.sort(key=lambda i: (-counts.get(i, 0), i))
+        ids = ids[:limit]
+        r_books = await db.execute(
+            select(Book)
+            .where(Book.id.in_(ids))
+            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+        )
+        by_id = {b.id: b for b in r_books.scalars().all()}
+        return [by_id[i] for i in ids if i in by_id]
 
 
 class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDetailUpdate]):

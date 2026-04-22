@@ -12,6 +12,10 @@ from app.repositories.user_repository import user_repository
 
 settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login",
+    auto_error=False,
+)
 
 
 def _unauthorized(detail: str) -> HTTPException:
@@ -42,6 +46,27 @@ async def get_current_user(
 
     if getattr(user, "deleted_at", None) is not None:
         raise _unauthorized("Account has been deleted")
+    return user
+
+
+async def get_current_user_optional(
+    db: AsyncSession = Depends(get_db),
+    token: str | None = Depends(oauth2_scheme_optional),
+) -> User | None:
+    """Có token hợp lệ thì trả user, không thì None (không raise)."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        user_id = int(user_id)
+    except (JWTError, ValueError):
+        return None
+    user = await user_repository.get(db, user_id)
+    if user is None or getattr(user, "deleted_at", None) is not None:
+        return None
     return user
 
 

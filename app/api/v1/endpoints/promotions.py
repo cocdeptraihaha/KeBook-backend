@@ -1,8 +1,10 @@
 """Promotion endpoints - mã khuyến mãi."""
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_superuser
+from app.api.dependencies import get_current_superuser, get_current_user_optional
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.promotion import Promotion, PromotionCreate, PromotionUpdate, PromotionValidate
@@ -17,10 +19,12 @@ async def validate_promotion(
     code: str = Query(..., description="Promotion code"),
     order_total: float = Query(0, ge=0, description="Order total amount"),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Validate promotion code (public - use at checkout)."""
+    """Validate promotion code (public - use at checkout). Mã cá nhân cần đăng nhập."""
+    uid = current_user.id if current_user else None
     promo, discount, err = await promotion_service.validate_code(
-        db, code, order_total
+        db, code, order_total, user_id=uid
     )
     if err:
         return {"valid": False, "message": err, "discount_amount": 0}
