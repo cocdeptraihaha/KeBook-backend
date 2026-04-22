@@ -39,3 +39,20 @@ class UserBrief(BaseModel):
     username: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class EligibilityResponse(BaseModel):
+    """Trả về cho GET /reviews/me/eligible."""
+
+    eligible: bool
+    already_reviewed: bool
+    last_delivered_at: Optional[datetime] = None
+
+
+class BookAvgRateOut(BaseModel):
+    book_id: int
+    avg_rate: Optional[float] = None
+    total_reviews: int = 0
+
+
+ReviewWithUser.model_rebuild()

@@ -5,31 +5,66 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.review import Review, ReviewCreate, ReviewUpdate
+from app.schemas.review import (
+    BookAvgRateOut,
+    EligibilityResponse,
+    Review,
+    ReviewCreate,
+    ReviewUpdate,
+    ReviewWithUser,
+)
 from app.services.review_service import review_service
 
 router = APIRouter()
 
 
-@router.get("/book/{book_id}", response_model=list[Review])
+@router.get("/me/eligible", response_model=EligibilityResponse)
+async def get_my_review_eligibility(
+    book_id: int = Query(..., ge=1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Điều kiện tạo review mới: đã giao trong 30 ngày và chưa có review còn hiệu lực."""
+    return await review_service.get_eligibility(db, current_user.id, book_id)
+
+
+@router.get("/me/by-book/{book_id}", response_model=Review)
+async def get_my_review_by_book(
+    book_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Review hiện tại của tôi cho sách này (bản còn hiệu lực)."""
+    r = await review_service.get_my_review_by_book(db, current_user.id, book_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return r
+
+
+@router.get("/book/{book_id}", response_model=list[ReviewWithUser])
 async def list_reviews_by_book(
     book_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """List reviews by book (public)."""
+    """List reviews by book (public), kèm tên user."""
     return await review_service.get_by_book(db, book_id, skip, limit)
 
 
-@router.get("/book/{book_id}/avg")
+@router.get("/book/{book_id}/avg", response_model=BookAvgRateOut)
 async def get_book_avg_rate(
     book_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Average rating of book (public)."""
+    """Điểm trung bình + số lượng review (public)."""
     avg = await review_service.get_avg_rate(db, book_id)
-    return {"book_id": book_id, "avg_rate": round(float(avg), 2) if avg else None}
+    n = await review_service.count_by_book(db, book_id)
+    return BookAvgRateOut(
+        book_id=book_id,
+        avg_rate=round(float(avg), 2) if avg is not None else None,
+        total_reviews=n,
+    )
 
 
 @router.post("/", response_model=Review, status_code=status.HTTP_201_CREATED)
