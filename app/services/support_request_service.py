@@ -43,9 +43,18 @@ class SupportRequestService:
         return req
 
     async def get_all(
-        self, db: AsyncSession, skip: int = 0, limit: int = 100
+        self,
+        db: AsyncSession,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        q: Optional[str] = None,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
     ) -> List[SupportRequest]:
-        return await self.repository.get_multi(db, skip, limit)
+        return await self.repository.get_multi(
+            db, skip, limit, status=status, q=q, from_dt=from_dt, to_dt=to_dt
+        )
 
     async def respond(
         self,

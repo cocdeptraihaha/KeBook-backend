@@ -20,6 +20,11 @@ class SupportRequestUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class SupportRequestStatusPatch(BaseModel):
+    status: str
+    note: Optional[str] = None
+
+
 class SupportRequest(SupportRequestBase):
     id: int
     created_at: Optional[datetime] = None
