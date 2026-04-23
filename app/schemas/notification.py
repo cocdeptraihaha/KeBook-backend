@@ -18,6 +18,18 @@ class NotificationSendRequest(NotificationBase):
     user_ids: list[int] = []
 
 
+class UserFilter(BaseModel):
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+
+
+class NotificationBroadcastRequest(NotificationBase):
+    """Gửi hàng loạt: `user_ids` cụ thể, hoặc `user_filter`, hoặc bỏ cả hai = tất cả user."""
+
+    user_ids: Optional[list[int]] = None
+    user_filter: Optional[UserFilter] = None
+
+
 class Notification(NotificationBase):
     id: int
     send_date: Optional[datetime] = None

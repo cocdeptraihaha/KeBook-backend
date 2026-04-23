@@ -1,6 +1,6 @@
 """Notification service."""
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,6 +69,41 @@ class NotificationService:
             payload = await self._build_new_notif_payload(db, notif, uid)
             await connection_manager.send_json_to_user(uid, payload)
         return notif
+
+    async def resolve_broadcast_recipient_ids(
+        self,
+        db: AsyncSession,
+        user_ids: Optional[List[int]],
+        is_active: Optional[bool] = None,
+        is_superuser: Optional[bool] = None,
+    ) -> List[int]:
+        if user_ids:
+            return sorted({int(x) for x in user_ids})
+        stmt = select(User.id).where(User.deleted_at.is_(None))  # noqa: E712
+        if is_active is not None:
+            stmt = stmt.where(User.is_active == is_active)
+        if is_superuser is not None:
+            stmt = stmt.where(User.is_superuser == is_superuser)
+        r = await db.execute(stmt)
+        return [int(x[0]) for x in r.all()]
+
+    async def broadcast(
+        self,
+        db: AsyncSession,
+        *,
+        title: str,
+        message: str,
+        type: str = "INFO",
+        user_ids: Optional[List[int]] = None,
+        is_active: Optional[bool] = None,
+        is_superuser: Optional[bool] = None,
+    ) -> Notification:
+        ids = await self.resolve_broadcast_recipient_ids(
+            db, user_ids, is_active=is_active, is_superuser=is_superuser
+        )
+        if not ids:
+            raise ValueError("Không có người nhận")
+        return await self.create_and_send_to_users(db, ids, title, message, type)
 
     async def get_all(
         self, db: AsyncSession, skip: int = 0, limit: int = 100

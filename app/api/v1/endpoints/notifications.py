@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.notification import Notification, NotificationSendRequest
+from app.schemas.notification import (
+    Notification,
+    NotificationBroadcastRequest,
+    NotificationSendRequest,
+)
 from app.services.notification_service import notification_service
 
 router = APIRouter()
@@ -86,3 +90,27 @@ async def create_notification(
         message=body.message or "",
         type=body.type or "INFO",
     )
+
+
+@router.post("/broadcast", response_model=Notification, status_code=201)
+async def broadcast_notification(
+    body: NotificationBroadcastRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    """Gửi thông báo tới user_ids, hoặc lọc user_filter, hoặc toàn bộ user (không truyền cả hai)."""
+    uf = body.user_filter
+    is_active = uf.is_active if uf else None
+    is_superuser = uf.is_superuser if uf else None
+    try:
+        return await notification_service.broadcast(
+            db,
+            title=body.title or "",
+            message=body.message or "",
+            type=body.type or "INFO",
+            user_ids=body.user_ids,
+            is_active=is_active,
+            is_superuser=is_superuser,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
