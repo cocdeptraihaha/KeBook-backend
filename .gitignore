@@ -42,3 +42,4 @@ htmlcov/
 # Agents / local tooling
 .agents/
 .cursor/
+skills-lock.json
