@@ -1,14 +1,50 @@
 """ReturnRequest endpoints - yêu cầu trả hàng."""
+from datetime import date, datetime, time
+from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.return_request import ReturnRequest, ReturnRequestCreate, ReturnRequestProcess
+from app.schemas.return_request import (
+    ReturnRequest,
+    ReturnRequestAdminRow,
+    ReturnRequestCreate,
+    ReturnRequestProcess,
+)
 from app.services.return_request_service import return_request_service
 
 router = APIRouter()
+
+
+def _range_q(from_d: Optional[date], to_d: Optional[date]) -> tuple[Optional[datetime], Optional[datetime]]:
+    from_dt = datetime.combine(from_d, time.min) if from_d else None
+    to_dt = datetime.combine(to_d, time.max) if to_d else None
+    return from_dt, to_dt
+
+
+@router.get("/admin/all", response_model=list[ReturnRequestAdminRow])
+async def admin_list_return_requests(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    status: Optional[Literal["PENDING", "APPROVED", "REJECTED"]] = Query(None),
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    """Admin: danh sách yêu cầu trả hàng (lọc theo trạng thái / ngày)."""
+    from_dt, to_dt = _range_q(from_d, to_d)
+    return await return_request_service.list_admin(
+        db,
+        skip=skip,
+        limit=limit,
+        status=status,
+        from_dt=from_dt,
+        to_dt=to_dt,
+    )
 
 
 @router.get("/", response_model=list[ReturnRequest])

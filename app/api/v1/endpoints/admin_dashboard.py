@@ -4,7 +4,7 @@ import io
 from datetime import date, datetime, time
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,12 +12,16 @@ from app.api.dependencies import get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.admin_dashboard import (
+    CancelRatePointOut,
     CategoryRevenueRow,
     DashboardSummaryOut,
+    OrderStatusBreakdownRow,
     TopBookRow,
+    TopCustomerOut,
     UserTimeseriesRow,
 )
 from app.services.admin_dashboard_service import admin_dashboard_service
+from app.services.audit_service import record_admin_audit
 from app.services.order_service import order_service
 
 router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
@@ -109,3 +113,78 @@ async def dashboard_user_timeseries(
         db, from_dt=from_dt, to_dt=to_dt, group_by=group_by
     )
     return [UserTimeseriesRow.model_validate(r) for r in rows]
+
+
+@router.get("/top-customers", response_model=list[TopCustomerOut])
+async def dashboard_top_customers(
+    request: Request,
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    from_dt, to_dt = _range(from_d, to_d)
+    rows = await admin_dashboard_service.get_top_customers(
+        db, from_dt=from_dt, to_dt=to_dt, limit=limit
+    )
+    await record_admin_audit(
+        db,
+        actor_user_id=current_user.id,
+        action="admin.dashboard.view.top_customers",
+        target_type="dashboard",
+        payload={"from": str(from_d), "to": str(to_d), "limit": limit},
+        ip=request.client.host if request.client else None,
+    )
+    return [TopCustomerOut.model_validate(r) for r in rows]
+
+
+@router.get("/order-status-breakdown", response_model=list[OrderStatusBreakdownRow])
+async def dashboard_order_status_breakdown(
+    request: Request,
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    from_dt, to_dt = _range(from_d, to_d)
+    rows = await admin_dashboard_service.order_status_breakdown(
+        db, from_dt=from_dt, to_dt=to_dt
+    )
+    await record_admin_audit(
+        db,
+        actor_user_id=current_user.id,
+        action="admin.dashboard.view.order_status_breakdown",
+        target_type="dashboard",
+        payload={"from": str(from_d), "to": str(to_d)},
+        ip=request.client.host if request.client else None,
+    )
+    return [OrderStatusBreakdownRow.model_validate(r) for r in rows]
+
+
+@router.get("/cancellation-timeseries", response_model=list[CancelRatePointOut])
+async def dashboard_cancellation_timeseries(
+    request: Request,
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    group_by: Literal["day", "week", "month"] = Query("day"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    from_dt, to_dt = _range(from_d, to_d)
+    rows = await admin_dashboard_service.cancellation_timeseries(
+        db, from_dt=from_dt, to_dt=to_dt, group_by=group_by
+    )
+    await record_admin_audit(
+        db,
+        actor_user_id=current_user.id,
+        action="admin.dashboard.view.cancellation_timeseries",
+        target_type="dashboard",
+        payload={
+            "from": str(from_d),
+            "to": str(to_d),
+            "group_by": group_by,
+        },
+        ip=request.client.host if request.client else None,
+    )
+    return [CancelRatePointOut.model_validate(r) for r in rows]
