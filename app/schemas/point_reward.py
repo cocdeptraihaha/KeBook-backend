@@ -24,3 +24,21 @@ class RedeemRewardOut(BaseModel):
     max_discount: float | None = None
     end_date: datetime | None = None
     points_balance_after: int
+
+
+class PointRewardCreate(BaseModel):
+    name: str
+    cost_points: int
+    discount_percent: float
+    max_discount: float | None = None
+    valid_days: int = 30
+    active: bool = True
+
+
+class PointRewardUpdate(BaseModel):
+    name: str | None = None
+    cost_points: int | None = None
+    discount_percent: float | None = None
+    max_discount: float | None = None
+    valid_days: int | None = None
+    active: bool | None = None
