@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
@@ -210,6 +210,142 @@ class AdminDashboardService:
             else:
                 p = ""
             out.append({"period": p, "new_users": int(cnt or 0)})
+        return out
+
+
+    async def get_top_customers(
+        self,
+        db: AsyncSession,
+        *,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        limit: int = 10,
+    ) -> List[dict]:
+        stmt = (
+            select(
+                User.id,
+                User.full_name,
+                User.email,
+                func.count(Order.id).label("order_count"),
+                func.coalesce(func.sum(Order.total_price), 0.0).label("total_spent"),
+            )
+            .join(Order, Order.user_id == User.id)
+            .where(
+                User.deleted_at.is_(None),
+                Order.deleted_at.is_(None),
+                Order.status.in_([OrderStatus.DELIVERED, OrderStatus.COMPLETED]),
+            )
+            .group_by(User.id, User.full_name, User.email)
+            .order_by(func.coalesce(func.sum(Order.total_price), 0.0).desc())
+            .limit(limit)
+        )
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+        r = await db.execute(stmt)
+        out: List[dict] = []
+        for uid, fn, em, oc, ts in r.all():
+            out.append(
+                {
+                    "user_id": int(uid),
+                    "full_name": fn,
+                    "email": em,
+                    "order_count": int(oc or 0),
+                    "total_spent": float(ts or 0),
+                }
+            )
+        return out
+
+    async def order_status_breakdown(
+        self,
+        db: AsyncSession,
+        *,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+    ) -> List[dict]:
+        stmt = (
+            select(
+                Order.status,
+                func.count(Order.id),
+                func.coalesce(func.sum(Order.total_price), 0.0),
+            )
+            .where(Order.deleted_at.is_(None))
+            .group_by(Order.status)
+        )
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+        r = await db.execute(stmt)
+        per: dict[str, tuple[int, float]] = {}
+        for status_cell, cnt, rev in r.all():
+            key = str(status_cell).split(".")[-1] if status_cell is not None else ""
+            per[key] = (int(cnt or 0), float(rev or 0))
+        out: List[dict] = []
+        for st in OrderStatus:
+            sk = st.value
+            c, rv = per.get(sk, (0, 0.0))
+            out.append({"status": sk, "count": c, "revenue": rv})
+        return out
+
+    async def cancellation_timeseries(
+        self,
+        db: AsyncSession,
+        *,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        group_by: str = "day",
+    ) -> List[dict]:
+        gb = (group_by or "day").lower()
+        if gb == "month":
+            period_expr = func.date_format(Order.order_date, "%Y-%m-01")
+        elif gb == "week":
+            period_expr = func.date_format(Order.order_date, "%X-W%V")
+        else:
+            period_expr = func.date(Order.order_date)
+
+        cancelled_cond = Order.status.in_(
+            [OrderStatus.CANCELLED, OrderStatus.CANCEL_REQUESTED]
+        )
+        stmt = (
+            select(
+                period_expr.label("period"),
+                func.count(Order.id).label("total_orders"),
+                func.coalesce(
+                    func.sum(case((cancelled_cond, 1), else_=0)),
+                    0,
+                ).label("cancelled_count"),
+            )
+            .where(Order.deleted_at.is_(None))
+            .group_by(period_expr)
+            .order_by(period_expr)
+        )
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+        result = await db.execute(stmt)
+        out: List[dict] = []
+        for period, total_o, cancelled in result.all():
+            p = period
+            if hasattr(p, "isoformat"):
+                p = p.isoformat()
+            elif p is not None:
+                p = str(p)
+            else:
+                p = ""
+            tot = int(total_o or 0)
+            canc = int(cancelled or 0)
+            rate = (canc / tot) if tot else 0.0
+            out.append(
+                {
+                    "period": p,
+                    "total_orders": tot,
+                    "cancelled_count": canc,
+                    "cancel_rate": round(rate, 4),
+                }
+            )
         return out
 
 
