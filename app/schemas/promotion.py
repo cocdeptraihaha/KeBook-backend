@@ -25,6 +25,7 @@ class PromotionUpdate(BaseModel):
     max_discount: Optional[float] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
 
 class Promotion(PromotionBase):
@@ -37,3 +38,14 @@ class Promotion(PromotionBase):
 class PromotionValidate(BaseModel):
     """Request validate mã khuyến mãi."""
     code: str
+
+
+class PromotionStatsOut(BaseModel):
+    promotion_id: int
+    usage_count: int
+    total_discount: float
+
+
+class PromotionIssueBody(BaseModel):
+    user_id: int
+    promotion_id: int

@@ -1,7 +1,12 @@
 """Promotion service."""
+import secrets
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.order_promotion import OrderPromotion
 from app.models.promotion import Promotion
 from app.schemas.promotion import PromotionCreate, PromotionUpdate
 from app.repositories.promotion_repository import promotion_repository
@@ -41,6 +46,47 @@ class PromotionService:
         self, db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> List[Promotion]:
         return await self.repository.get_multi_active(db, skip, limit)
+
+    async def get_usage_stats(self, db: AsyncSession, promotion_id: int) -> dict:
+        r = await db.execute(
+            select(
+                func.count(OrderPromotion.id),
+                func.coalesce(func.sum(OrderPromotion.discount_amount), 0.0),
+            ).where(OrderPromotion.promotion_id == promotion_id)
+        )
+        row = r.one()
+        return {
+            "promotion_id": promotion_id,
+            "usage_count": int(row[0] or 0),
+            "total_discount": float(row[1] or 0),
+        }
+
+    async def issue_personal_copy(
+        self, db: AsyncSession, user_id: int, template_promotion_id: int
+    ) -> Promotion:
+        tpl = await self.repository.get(db, template_promotion_id)
+        if not tpl:
+            raise ValueError("Promotion mẫu không tồn tại")
+        now = datetime.utcnow()
+        end = tpl.end_date
+        if end is None or end <= now:
+            end = now + timedelta(days=30)
+        code = f"ISS{user_id}{secrets.token_hex(3).upper()}"
+        name = f"{tpl.name or 'Voucher'} (cấp admin)"
+        new = Promotion(
+            owner_user_id=user_id,
+            code=code,
+            name=name,
+            discount_percent=tpl.discount_percent,
+            max_discount=tpl.max_discount,
+            start_date=now,
+            end_date=end,
+            deleted_at=None,
+        )
+        db.add(new)
+        await db.flush()
+        await db.refresh(new)
+        return new
 
 
 promotion_service = PromotionService()

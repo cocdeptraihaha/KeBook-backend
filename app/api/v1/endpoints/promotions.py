@@ -1,17 +1,68 @@
 """Promotion endpoints - mã khuyến mãi."""
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_superuser, get_current_user_optional
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.promotion import Promotion, PromotionCreate, PromotionUpdate, PromotionValidate
+from app.schemas.promotion import (
+    Promotion,
+    PromotionCreate,
+    PromotionIssueBody,
+    PromotionStatsOut,
+    PromotionUpdate,
+    PromotionValidate,
+)
 from app.repositories.promotion_repository import promotion_repository
 from app.services.promotion_service import promotion_service
 
 router = APIRouter()
+
+
+@router.post("/admin/issue", response_model=Promotion, status_code=status.HTTP_201_CREATED)
+async def admin_issue_promotion_to_user(
+    body: PromotionIssueBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    """Tạo mã khuyến mãi cá nhân cho user (sao chép từ promotion mẫu)."""
+    try:
+        return await promotion_service.issue_personal_copy(
+            db, body.user_id, body.promotion_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{promo_id}/stats", response_model=PromotionStatsOut)
+async def promotion_usage_stats(
+    promo_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    promo = await promotion_repository.get(db, promo_id)
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+    data = await promotion_service.get_usage_stats(db, promo_id)
+    return PromotionStatsOut.model_validate(data)
+
+
+@router.delete("/{promo_id}", response_model=Promotion)
+async def soft_delete_promotion(
+    promo_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    promo = await promotion_repository.get(db, promo_id)
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+    promo.deleted_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(promo)
+    return promo
 
 
 @router.get("/validate")
