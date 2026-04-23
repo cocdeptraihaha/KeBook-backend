@@ -154,10 +154,99 @@ class OrderService:
         return order
 
     async def get_all_orders(
-        self, db: AsyncSession, skip: int = 0, limit: int = 100, status: Optional[str] = None
+        self,
+        db: AsyncSession,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        statuses: Optional[List[str]] = None,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        user_id: Optional[int] = None,
+        q: Optional[str] = None,
     ) -> List[Order]:
-        """Admin: lấy tất cả đơn."""
-        return await self.repository.get_all_orders(db, skip, limit, status=status)
+        """Admin: lấy tất cả đơn (có thể lọc nâng cao)."""
+        return await self.repository.get_all_orders(
+            db,
+            skip,
+            limit,
+            status=status,
+            statuses=statuses,
+            from_dt=from_dt,
+            to_dt=to_dt,
+            user_id=user_id,
+            q=q,
+        )
+
+    def _history_status_str(self, hist: OrderStatusHistory) -> str:
+        if hist.e_order_history is None:
+            return ""
+        v = hist.e_order_history
+        return v.value if hasattr(v, "value") else str(v).split(".")[-1]
+
+    def _previous_status_before_cancel_request(self, order: Order) -> Optional[str]:
+        """Lấy trạng thái gần nhất trước CANCEL_REQUESTED (theo thời gian + id)."""
+        hist = list(order.status_history or [])
+        hist.sort(key=lambda h: (h.status_change_date or datetime.min, h.id or 0), reverse=True)
+        if not hist:
+            return "PENDING"
+        i = 0
+        while i < len(hist) and self._history_status_str(hist[i]) == "CANCEL_REQUESTED":
+            i += 1
+        if i < len(hist):
+            return self._history_status_str(hist[i])
+        return "PENDING"
+
+    async def admin_resolve_cancel_request(
+        self,
+        db: AsyncSession,
+        order_id: int,
+        approve: bool,
+        description: Optional[str] = None,
+    ) -> Optional[Order]:
+        """Duyệt hủy (→ CANCELLED) hoặc từ chối (khôi phục trạng thái trước đó)."""
+        order = await self.repository.get_with_items(db, order_id)
+        if not order:
+            return None
+        current = str(order.status).replace("OrderStatus.", "")
+        if current != "CANCEL_REQUESTED":
+            raise ValueError("Đơn không ở trạng thái yêu cầu hủy (CANCEL_REQUESTED)")
+
+        from app.services.notification_service import notification_service
+
+        if approve:
+            order.status = "CANCELLED"
+            self._add_history(
+                db,
+                order_id,
+                "CANCELLED",
+                description or "Admin chấp nhận hủy đơn",
+            )
+            await db.flush()
+            await db.refresh(order)
+            await notification_service.notify_order_status_for_buyer(
+                db, order.user_id, order.id, "CANCELLED"
+            )
+            return order
+
+        prev = self._previous_status_before_cancel_request(order)
+        if prev == "CANCEL_REQUESTED" or not prev:
+            prev = "CONFIRMED"
+        if prev not in VALID_STATUSES:
+            prev = "CONFIRMED"
+        order.status = prev
+        self._add_history(
+            db,
+            order_id,
+            prev,
+            description or "Admin từ chối yêu cầu hủy đơn",
+        )
+        await db.flush()
+        await db.refresh(order)
+        await notification_service.notify_order_status_for_buyer(
+            db, order.user_id, order.id, prev
+        )
+        return order
 
     # ── build order items ────────────────────────────────────
 
@@ -343,6 +432,36 @@ class OrderService:
         )
         return order
 
+    async def update_shipment(
+        self,
+        db: AsyncSession,
+        order_id: int,
+        *,
+        tracking_number: Optional[str] = None,
+        shipping_provider: Optional[str] = None,
+    ) -> Optional[Order]:
+        """Admin: cập nhật mã vận đơn / đơn vị vận chuyển."""
+        order = await self.repository.get(db, order_id)
+        if not order:
+            return None
+        if tracking_number is not None:
+            order.tracking_number = tracking_number
+        if shipping_provider is not None:
+            order.shipping_provider = shipping_provider
+        await db.flush()
+        await db.refresh(order)
+        from app.services.notification_service import notification_service
+
+        meta = f"tracking:{order.tracking_number or ''}|provider:{order.shipping_provider or ''}"
+        await notification_service.create_and_send_to_users(
+            db,
+            [order.user_id],
+            title=f"Đơn hàng #{order_id}",
+            message=f"Đơn của bạn đã có thông tin vận chuyển.\n{meta}",
+            type="ORDER_SHIPMENT",
+        )
+        return order
+
     # ── cancel / request cancel (user) ───────────────────────
 
     async def cancel_or_request_cancel(
@@ -388,23 +507,23 @@ class OrderService:
         )
         return order, "cancel_requested"
 
-    async def get_user_money_stats(
+    async def get_money_stats(
         self,
         db: AsyncSession,
-        user_id: int,
+        user_id: Optional[int] = None,
         from_dt: Optional[datetime] = None,
         to_dt: Optional[datetime] = None,
     ):
-        """Gom nhóm tiền + số đơn theo bucket trạng thái (cho user)."""
+        """Gom nhóm tiền + số đơn theo bucket trạng thái (user cụ thể hoặc toàn shop nếu user_id=None)."""
         from app.schemas.order import MoneyBucket, OrderMoneyStats
 
-        stmt = (
-            select(Order.status, func.count(Order.id), func.coalesce(func.sum(Order.total_price), 0.0))
-            .where(
-                Order.user_id == user_id,
-                Order.deleted_at.is_(None),
-            )
-        )
+        stmt = select(
+            Order.status,
+            func.count(Order.id),
+            func.coalesce(func.sum(Order.total_price), 0.0),
+        ).where(Order.deleted_at.is_(None))
+        if user_id is not None:
+            stmt = stmt.where(Order.user_id == user_id)
         if from_dt is not None:
             stmt = stmt.where(Order.order_date >= from_dt)
         if to_dt is not None:
@@ -445,6 +564,70 @@ class OrderService:
             cancelled=MoneyBucket(count=cx[0], total=cx[1]),
             total_spent=float(dv[1]),
         )
+
+    async def get_user_money_stats(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+    ):
+        """Gom nhóm tiền + số đơn theo bucket trạng thái (một user)."""
+        return await self.get_money_stats(db, user_id=user_id, from_dt=from_dt, to_dt=to_dt)
+
+    async def get_revenue_timeseries(
+        self,
+        db: AsyncSession,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        group_by: str = "day",
+    ) -> List[dict]:
+        """Chuỗi doanh thu theo ngày/tuần/tháng (chỉ DELIVERED + COMPLETED)."""
+        from app.models.order import OrderStatus
+
+        gb = (group_by or "day").lower()
+        if gb == "month":
+            period_expr = func.date_format(Order.order_date, "%Y-%m-01")
+        elif gb == "week":
+            period_expr = func.date_format(Order.order_date, "%X-W%V")
+        else:
+            period_expr = func.date(Order.order_date)
+
+        stmt = (
+            select(
+                period_expr.label("period"),
+                func.count(Order.id),
+                func.coalesce(func.sum(Order.total_price), 0.0),
+            )
+            .where(
+                Order.deleted_at.is_(None),
+                Order.status.in_([OrderStatus.DELIVERED, OrderStatus.COMPLETED]),
+            )
+            .group_by(period_expr)
+            .order_by(period_expr)
+        )
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+        result = await db.execute(stmt)
+        out: List[dict] = []
+        for period, cnt, total in result.all():
+            p = period
+            if hasattr(p, "isoformat"):
+                p = p.isoformat()
+            elif p is not None:
+                p = str(p)
+            else:
+                p = ""
+            out.append(
+                {
+                    "period": p,
+                    "order_count": int(cnt),
+                    "revenue": float(total or 0),
+                }
+            )
+        return out
 
 
 order_service = OrderService()

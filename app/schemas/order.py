@@ -70,6 +70,13 @@ class CancelOrderRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class CancelDecisionRequest(BaseModel):
+    """Admin duyệt / từ chối yêu cầu hủy đơn (khi status == CANCEL_REQUESTED)."""
+
+    approve: bool
+    description: Optional[str] = None
+
+
 class OrderStatusHistoryOut(BaseModel):
     id: int
     status: Optional[str] = None
@@ -96,6 +103,8 @@ class Order(OrderBase):
     total_price: Optional[float] = None
     user_id: int = 0
     deleted_at: Optional[datetime] = None
+    tracking_number: Optional[str] = None
+    shipping_provider: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -126,3 +135,20 @@ class OrderMoneyStats(BaseModel):
     delivered: MoneyBucket
     cancelled: MoneyBucket
     total_spent: float  # chỉ nhóm đã giao (DELIVERED + COMPLETED)
+
+
+class OrderRevenueStats(OrderMoneyStats):
+    """Cùng cấu trúc OrderMoneyStats; `total_spent` = doanh thu đã giao (admin toàn shop)."""
+
+    pass
+
+
+class RevenueTimeseriesRow(BaseModel):
+    period: str
+    order_count: int
+    revenue: float
+
+
+class OrderShipmentUpdate(BaseModel):
+    tracking_number: Optional[str] = None
+    shipping_provider: Optional[str] = None
