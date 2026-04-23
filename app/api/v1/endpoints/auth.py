@@ -1,12 +1,14 @@
 """Auth endpoints: login, register with OTP, forgot password."""
 import logging
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 
 from app.core.config import get_settings
+from app.core.ratelimit import limiter
 
 logger = logging.getLogger(__name__)
 from app.core.database import get_db
@@ -134,14 +136,14 @@ async def resend_otp(
     request: ResendOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Resend activation OTP. Only sends if email exists and user is inactive."""
+    """Resend activation OTP. Chỉ gửi nếu email tồn tại và chưa kích hoạt; email lạ vẫn 200 (bảo mật)."""
     user = await user_service.repository.get_by_email(db, request.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="Email not found")
+    if not user or user.deleted_at is not None:
+        return {
+            "message": "If this email is registered and not activated, an OTP has been sent."
+        }
     if user.is_active:
         raise HTTPException(status_code=400, detail="Account already activated")
-    if user.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Account not found")
 
     await otp_service.create_and_send_otp(
         db,
@@ -206,7 +208,9 @@ async def reset_password(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("30/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):

@@ -12,6 +12,9 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
         pass
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -21,6 +24,7 @@ from fastapi_pagination import add_pagination
 from app.api.v1.router import api_router
 from app.api.ws_notifications import router as ws_notifications_router
 from app.core.database import database, AsyncSessionLocal
+from app.core.ratelimit import limiter
 from app.services.otp_service import otp_service
 
 # Chu kỳ xóa OTP hết hạn (giây)
@@ -73,6 +77,8 @@ app = FastAPI(
     description="API template với FastAPI, async và dependency injection",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -81,6 +87,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_notifications_router, prefix="/api/v1")

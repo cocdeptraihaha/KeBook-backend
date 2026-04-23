@@ -27,3 +27,6 @@ cloudinary>=1.36.0
 # Dev & Test
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
+
+# Rate limiting
+slowapi>=0.1.9
