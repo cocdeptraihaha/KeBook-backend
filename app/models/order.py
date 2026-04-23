@@ -28,6 +28,8 @@ class Order(Base):
     order_date = Column(DateTime, nullable=True)
     phone_number = Column(String(255), nullable=True)
     shipping_address = Column(String(255), nullable=True)
+    tracking_number = Column(String(64), nullable=True)
+    shipping_provider = Column(String(64), nullable=True)
     status = Column(SQLEnum(OrderStatus), nullable=True)
     total_price = Column(Float, nullable=True)
     payment_id = Column(Integer, ForeignKey("payment.id"), nullable=False)

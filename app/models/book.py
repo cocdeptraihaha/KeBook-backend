@@ -1,5 +1,5 @@
 """Book model."""
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, Float, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -20,6 +20,9 @@ class Book(Base):
     title = Column(String(255), nullable=True)
     book_detail_id = Column(Integer, ForeignKey("book_details.id"), nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+    is_published = Column(Boolean, nullable=False, default=True)
+    slug = Column(String(255), nullable=True, unique=True)
+    meta_description = Column(String(255), nullable=True)
 
     book_detail = relationship("BookDetail", back_populates="book")
     discounts = relationship(

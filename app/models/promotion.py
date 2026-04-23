@@ -18,5 +18,8 @@ class Promotion(Base):
     name = Column(String(255), nullable=True)
     start_date = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+    min_order_amount = Column(Float, nullable=True)
+    usage_limit = Column(Integer, nullable=True)
+    used_count = Column(Integer, nullable=False, default=0)
 
     order_promotions = relationship("OrderPromotion", back_populates="promotion")

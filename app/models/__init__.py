@@ -25,6 +25,7 @@ from app.models.point_transaction import PointTransaction
 from app.models.favorite import Favorite
 from app.models.book_view import BookView
 from app.models.point_reward import PointReward
+from app.models.admin_audit_log import AdminAuditLog
 
 __all__ = [
     "User",
@@ -58,4 +59,5 @@ __all__ = [
     "Favorite",
     "BookView",
     "PointReward",
+    "AdminAuditLog",
 ]
