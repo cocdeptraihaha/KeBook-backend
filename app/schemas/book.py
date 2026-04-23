@@ -169,3 +169,34 @@ class BookWithDetailOut(BookWithDetail):
     buyer_count: int = 0
     review_count: int = 0
     view_count: int = 0
+
+
+class BookDiscountAdminCreate(BaseModel):
+    discount_amount: Optional[float] = None
+    discount_percent: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    book_ids: List[int] = Field(default_factory=list)
+
+
+class BookDiscountAdminUpdate(BaseModel):
+    discount_amount: Optional[float] = None
+    discount_percent: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    book_ids: Optional[List[int]] = None
+
+
+class BookDiscountAdminOut(BaseModel):
+    id: int
+    discount_amount: Optional[float] = None
+    discount_percent: Optional[float] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    book_ids: List[int] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class BookCategoriesPut(BaseModel):
+    category_ids: List[int] = Field(default_factory=list)

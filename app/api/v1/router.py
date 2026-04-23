@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     auth,
     users,
     books,
+    book_discounts,
     book_details,
     categories,
     cart,
@@ -27,6 +28,9 @@ api_router.include_router(addresses.router, prefix="/addresses", tags=["addresse
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(books.router, prefix="/books", tags=["books"])
+api_router.include_router(
+    book_discounts.router, prefix="/book-discounts", tags=["book-discounts"]
+)
 api_router.include_router(book_details.router, prefix="/book-details", tags=["book-details"])
 api_router.include_router(categories.router, prefix="/categories", tags=["categories"])
 api_router.include_router(cart.router, prefix="/cart", tags=["cart"])
