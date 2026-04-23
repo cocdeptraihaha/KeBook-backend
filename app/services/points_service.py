@@ -84,6 +84,35 @@ class PointsService:
         )
         return bal
 
+    async def adjust_points(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        delta: int,
+        *,
+        reason: str,
+    ) -> int:
+        """Cộng (delta>0) hoặc trừ (delta<0) điểm, ghi lịch sử với reason (vd. ADMIN_ADJUST)."""
+        if delta == 0:
+            raise ValueError("delta must be non-zero")
+        if delta > 0:
+            return await self.add_points(
+                db,
+                user_id,
+                delta,
+                reason=reason or self.REASON_ADMIN,
+                ref_type="admin",
+                ref_id=None,
+            )
+        return await self.subtract_points(
+            db,
+            user_id,
+            abs(delta),
+            reason=reason or self.REASON_ADMIN,
+            ref_type="admin",
+            ref_id=None,
+        )
+
     async def award_for_new_review(
         self, db: AsyncSession, user_id: int, review_id: int
     ) -> int:

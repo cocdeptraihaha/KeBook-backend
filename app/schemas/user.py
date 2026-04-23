@@ -69,3 +69,16 @@ class UserInDB(User):
     """User với hashed_password (nội bộ)."""
 
     hashed_password: str
+
+
+class AdminUserStatusBody(BaseModel):
+    is_active: bool
+
+
+class AdminUserRoleBody(BaseModel):
+    is_superuser: bool
+
+
+class AdminPointsAdjustBody(BaseModel):
+    delta: int
+    reason: str

@@ -1,6 +1,7 @@
 """User repository."""
-from typing import Optional
-from sqlalchemy import select, or_
+from typing import List, Optional
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -42,6 +43,65 @@ class UserRepository(BaseRepository[User, UserCreateInDB, UserUpdate]):
             )
         )
         return result.scalars().first()
+
+    async def list_admin(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+        q: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_superuser: Optional[bool] = None,
+        include_deleted: bool = False,
+    ) -> List[User]:
+        stmt = select(User)
+        if not include_deleted:
+            stmt = stmt.where(User.deleted_at.is_(None))
+        if is_active is not None:
+            stmt = stmt.where(User.is_active == is_active)
+        if is_superuser is not None:
+            stmt = stmt.where(User.is_superuser == is_superuser)
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    User.email.like(term),
+                    User.username.like(term),
+                    User.full_name.like(term),
+                )
+            )
+        stmt = stmt.order_by(User.id.desc()).offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_admin(
+        self,
+        db: AsyncSession,
+        *,
+        q: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_superuser: Optional[bool] = None,
+        include_deleted: bool = False,
+    ) -> int:
+        stmt = select(func.count(User.id))
+        if not include_deleted:
+            stmt = stmt.where(User.deleted_at.is_(None))
+        if is_active is not None:
+            stmt = stmt.where(User.is_active == is_active)
+        if is_superuser is not None:
+            stmt = stmt.where(User.is_superuser == is_superuser)
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    User.email.like(term),
+                    User.username.like(term),
+                    User.full_name.like(term),
+                )
+            )
+        r = await db.execute(stmt)
+        return int(r.scalar() or 0)
 
 
 user_repository = UserRepository(User)

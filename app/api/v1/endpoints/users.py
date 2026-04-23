@@ -1,11 +1,18 @@
 """User endpoints."""
+import csv
+import io
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_active_user, get_current_user
+from app.api.dependencies import (
+    get_current_active_user,
+    get_current_superuser,
+    get_current_user,
+)
 from app.core.database import get_db
 from app.models.book import Book
 from app.models.book_view import BookView
@@ -14,12 +21,170 @@ from app.models.user import User
 from app.models.user_promotion import UserPromotion
 from app.schemas.book import Book as BookSchema
 from app.schemas.point_transaction import LoyaltyBalanceOut, PointTransactionOut
-from app.schemas.user import User as UserSchema, UserUpdate
+from app.schemas.order import Order as OrderSchema, OrderWithItems
+from app.schemas.user import (
+    AdminPointsAdjustBody,
+    AdminUserRoleBody,
+    AdminUserStatusBody,
+    User as UserSchema,
+    UserUpdate,
+)
 from app.repositories.point_transaction_repository import point_transaction_repository
+from app.services.audit_service import record_admin_audit
+from app.services.order_service import order_service
 from app.services.points_service import points_service
 from app.services.user_service import user_service
 
 router = APIRouter()
+
+
+# ── Admin (đăng ký trước /{user_id}) ─────────────────────────
+
+@router.get("/admin/all", response_model=list[UserSchema])
+async def admin_list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    q: str | None = Query(None),
+    is_active: bool | None = Query(None),
+    is_superuser: bool | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    return await user_service.repository.list_admin(
+        db,
+        skip=skip,
+        limit=limit,
+        q=q,
+        is_active=is_active,
+        is_superuser=is_superuser,
+    )
+
+
+@router.patch("/admin/{user_id}/status", response_model=UserSchema)
+async def admin_set_user_active(
+    request: Request,
+    user_id: int,
+    body: AdminUserStatusBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    user = await user_service.repository.get(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = body.is_active
+    await db.flush()
+    await db.refresh(user)
+    await record_admin_audit(
+        db,
+        actor_user_id=current_user.id,
+        action="user.set_active",
+        target_type="user",
+        target_id=user_id,
+        payload={"is_active": body.is_active},
+        ip=request.client.host if request.client else None,
+    )
+    return user
+
+
+@router.patch("/admin/{user_id}/role", response_model=UserSchema)
+async def admin_set_user_role(
+    user_id: int,
+    body: AdminUserRoleBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    user = await user_service.repository.get(db, user_id)
+    if not user or user.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_superuser = body.is_superuser
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
+@router.post("/admin/{user_id}/points-adjust", response_model=LoyaltyBalanceOut)
+async def admin_adjust_user_points(
+    user_id: int,
+    body: AdminPointsAdjustBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    user = await user_service.repository.get(db, user_id)
+    if not user or user.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        bal = await points_service.adjust_points(
+            db, user_id, body.delta, reason=body.reason or points_service.REASON_ADMIN
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return LoyaltyBalanceOut(balance=bal)
+
+
+@router.get("/admin/export.csv")
+async def admin_export_users_csv(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    rows = await user_service.repository.list_admin(db, skip=0, limit=10000)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(
+        ["id", "email", "username", "full_name", "is_active", "is_superuser", "loyalty_points"]
+    )
+    for u in rows:
+        w.writerow(
+            [
+                u.id,
+                u.email or "",
+                u.username or "",
+                u.full_name or "",
+                u.is_active,
+                u.is_superuser,
+                getattr(u, "loyalty_points", 0) or 0,
+            ]
+        )
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="users_export.csv"'},
+    )
+
+
+@router.get("/admin/{user_id}/orders", response_model=list[OrderWithItems])
+async def admin_list_user_orders(
+    user_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    user = await user_service.repository.get(db, user_id)
+    if not user or user.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="User not found")
+    orders = await order_service.get_user_orders(db, user_id, skip, limit)
+    return [
+        OrderWithItems.model_validate(
+            {
+                **OrderSchema.model_validate(o).model_dump(),
+                "order_items": [
+                    {
+                        "id": oi.id,
+                        "order_id": oi.order_id,
+                        "book_id": oi.book_id,
+                        "book_title": oi.book_title,
+                        "quantity": oi.quantity,
+                        "price": float(oi.price or 0),
+                        "deleted_at": oi.deleted_at,
+                    }
+                    for oi in (o.order_items or [])
+                ],
+                "status_history": [],
+            }
+        )
+        for o in orders
+    ]
 
 
 @router.get("/me", response_model=UserSchema)
