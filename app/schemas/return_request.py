@@ -32,3 +32,11 @@ class ReturnRequest(ReturnRequestBase):
     processed_by: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+
+class ReturnRequestAdminRow(ReturnRequest):
+    """Return request kèm thông tin khách và tên sách cho admin."""
+
+    buyer_email: Optional[str] = None
+    buyer_full_name: Optional[str] = None
+    book_title: Optional[str] = None
