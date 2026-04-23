@@ -1,8 +1,11 @@
 """Review endpoints - đánh giá sách."""
+from datetime import date, datetime, time
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.review import (
@@ -16,6 +19,45 @@ from app.schemas.review import (
 from app.services.review_service import review_service
 
 router = APIRouter()
+
+
+@router.get("/admin/all", response_model=list[ReviewWithUser])
+async def admin_list_reviews(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    book_id: Optional[int] = Query(None, ge=1),
+    user_id: Optional[int] = Query(None, ge=1),
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    include_deleted: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    from_dt = datetime.combine(from_d, time.min) if from_d else None
+    to_dt = datetime.combine(to_d, time.max) if to_d else None
+    rows = await review_service.admin_list_reviews(
+        db,
+        skip=skip,
+        limit=limit,
+        book_id=book_id,
+        user_id=user_id,
+        from_dt=from_dt,
+        to_dt=to_dt,
+        include_deleted=include_deleted,
+    )
+    return rows
+
+
+@router.delete("/admin/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_delete_review(
+    review_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    ok = await review_service.admin_delete_review(db, review_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return None
 
 
 @router.get("/me/eligible", response_model=EligibilityResponse)

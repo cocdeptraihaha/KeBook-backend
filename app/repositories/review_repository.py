@@ -176,5 +176,32 @@ class ReviewRepository(BaseRepository[Review, ReviewCreate, ReviewUpdate]):
         )
         return result.scalars().first()
 
+    async def admin_list(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        book_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        include_deleted: bool = False,
+    ) -> List[Review]:
+        stmt = select(Review).options(selectinload(Review.user))
+        if not include_deleted:
+            stmt = stmt.where(Review.deleted_at.is_(None))  # noqa: E712
+        if book_id is not None:
+            stmt = stmt.where(Review.book_id == book_id)
+        if user_id is not None:
+            stmt = stmt.where(Review.user_id == user_id)
+        if from_dt is not None:
+            stmt = stmt.where(Review.create_at >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Review.create_at <= to_dt)
+        stmt = stmt.order_by(Review.create_at.desc()).offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        return list(result.scalars().unique().all())
+
 
 review_repository = ReviewRepository(Review)

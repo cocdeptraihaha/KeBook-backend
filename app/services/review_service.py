@@ -98,5 +98,36 @@ class ReviewService:
         await db.flush()
         return True
 
+    async def admin_list_reviews(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        book_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+        include_deleted: bool = False,
+    ) -> List[Review]:
+        return await self.repository.admin_list(
+            db,
+            skip=skip,
+            limit=limit,
+            book_id=book_id,
+            user_id=user_id,
+            from_dt=from_dt,
+            to_dt=to_dt,
+            include_deleted=include_deleted,
+        )
+
+    async def admin_delete_review(self, db: AsyncSession, review_id: int) -> bool:
+        review = await self.repository.get(db, review_id)
+        if not review:
+            return False
+        review.deleted_at = datetime.utcnow()
+        await db.flush()
+        return True
+
 
 review_service = ReviewService()
