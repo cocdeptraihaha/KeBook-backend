@@ -237,6 +237,92 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         by_id = {b.id: b for b in r_books.scalars().all()}
         return [by_id[i] for i in ids if i in by_id]
 
+    def build_admin_list_query(
+        self,
+        *,
+        include_deleted: bool = False,
+        status: Optional[str] = None,
+        q: Optional[str] = None,
+        category_id: Optional[int] = None,
+        sort: str = "id",
+        order: str = "desc",
+    ):
+        """Select sách cho admin (lọc xóa mềm, sort)."""
+        from sqlalchemy import or_
+
+        stmt = (
+            select(Book)
+            .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
+            .options(selectinload(Book.discounts), selectinload(Book.book_detail))
+        )
+        if category_id is not None:
+            stmt = stmt.where(
+                exists(
+                    select(1)
+                    .select_from(BookCategory)
+                    .where(
+                        BookCategory.book_id == Book.id,
+                        BookCategory.category_id == category_id,
+                    )
+                )
+            )
+
+        st = (status or "active").lower()
+        if st == "deleted":
+            stmt = stmt.where(Book.deleted_at.is_not(None))
+        elif include_deleted:
+            pass
+        else:
+            stmt = stmt.where(Book.deleted_at.is_(None))
+
+        if q:
+            pattern = f"%{q.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(Book.title).like(pattern),
+                    func.lower(Book.author).like(pattern),
+                    func.lower(BookDetail.description).like(pattern),
+                    func.lower(BookDetail.publisher).like(pattern),
+                    func.lower(BookDetail.supplier).like(pattern),
+                )
+            )
+
+        sort_key = (sort or "id").lower()
+        ord_key = (order or "desc").lower()
+        col_map = {
+            "id": Book.id,
+            "stock": Book.stock_quantity,
+            "selling_price": Book.selling_price,
+            "created_at": Book.id,
+        }
+        col = col_map.get(sort_key, Book.id)
+        if ord_key == "asc":
+            stmt = stmt.order_by(col.asc())
+        else:
+            stmt = stmt.order_by(col.desc())
+        return stmt
+
+    async def list_low_stock(
+        self,
+        db: AsyncSession,
+        *,
+        threshold: int = 5,
+        limit: int = 50,
+    ) -> List[Book]:
+        stmt = (
+            select(Book)
+            .where(
+                Book.deleted_at.is_(None),
+                Book.stock_quantity.is_not(None),
+                Book.stock_quantity <= threshold,
+            )
+            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .order_by(Book.stock_quantity.asc(), Book.id)
+            .limit(limit)
+        )
+        r = await db.execute(stmt)
+        return list(r.scalars().all())
+
 
 class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDetailUpdate]):
     """Repository cho BookDetail."""

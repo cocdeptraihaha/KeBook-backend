@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.book import (
     Book as BookSchema,
+    BookCategoriesPut,
     BookCreate,
     BookCreateWithDetail,
     BookUpdate,
@@ -19,6 +20,42 @@ from app.repositories.book_view_repository import book_view_repository
 from app.services.book_service import book_service
 
 router = APIRouter()
+
+
+@router.get("/admin/all", response_model=Page[BookSchema])
+async def admin_list_books(
+    q: str | None = Query(None),
+    category_id: int | None = Query(None),
+    include_deleted: bool = Query(False),
+    status: str | None = Query(None, description="active | deleted"),
+    sort: str = Query("id", description="id | stock | selling_price | created_at"),
+    order: str = Query("desc", description="asc | desc"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    stmt = book_service.build_admin_list_query(
+        include_deleted=include_deleted,
+        status=status,
+        q=q,
+        category_id=category_id,
+        sort=sort,
+        order=order,
+    )
+    return await apaginate(db, stmt)
+
+
+@router.get("/admin/low-stock", response_model=list[BookSchema])
+async def admin_low_stock_books(
+    threshold: int = Query(5, ge=0, le=10000),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    rows = await book_service.list_low_stock(db, threshold=threshold, limit=limit)
+    for b in rows:
+        _ = list(b.discounts or [])
+        _ = b.book_detail
+    return rows
 
 
 @router.get("/", response_model=Page[BookSchema])
@@ -135,3 +172,49 @@ async def update_book(
         return full
     _ = list(book.discounts or [])
     return book
+
+
+@router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def soft_delete_book(
+    book_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    book = await book_service.soft_delete_book(db, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return None
+
+
+@router.post("/{book_id}/restore", response_model=BookSchema)
+async def restore_book(
+    book_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    book = await book_service.restore_book(db, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    full = await book_service.repository.get_with_detail(db, book.id)
+    if full:
+        _ = list(full.discounts or [])
+        _ = full.book_detail
+        return full
+    _ = list(book.discounts or [])
+    return book
+
+
+@router.put("/{book_id}/categories", response_model=BookSchema)
+async def put_book_categories(
+    book_id: int,
+    body: BookCategoriesPut,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    try:
+        full = await book_service.replace_book_categories(db, book_id, body.category_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _ = list(full.discounts or [])
+    _ = full.book_detail
+    return full
