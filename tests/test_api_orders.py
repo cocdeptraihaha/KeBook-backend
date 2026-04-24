@@ -3,9 +3,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-def test_get_orders_empty(client: TestClient, auth_headers):
-    """Danh sách đơn hàng rỗng."""
-    r = client.get("/api/v1/orders/", headers=auth_headers)
+def test_get_orders_empty(client: TestClient, empty_cart_headers):
+    """Danh sách đơn hàng rỗng (user tách biệt, không dùng chung seed/test khác)."""
+    r = client.get("/api/v1/orders/", headers=empty_cart_headers)
     assert r.status_code == 200
     assert r.json() == []
 
