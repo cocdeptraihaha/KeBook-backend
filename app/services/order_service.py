@@ -17,9 +17,12 @@ from app.models.user import User
 from app.models.user_promotion import UserPromotion
 from app.schemas.book import BookDiscountOut, _pick_active_discount
 from app.schemas.order import OrderCreate, CheckoutRequest
+from app.core.config import get_settings
 from app.repositories.order_repository import order_repository
 from app.repositories.cart_repository import cart_repository
+from app.repositories.promotion_repository import promotion_repository
 from app.services.promotion_service import promotion_service
+from app.services.points_service import points_service
 
 AUTO_CONFIRM_SECONDS = 30 * 60
 
@@ -37,6 +40,14 @@ STATUS_MAP = {
 }
 
 VALID_STATUSES = set(STATUS_MAP.keys())
+NEXT_PROGRESS_STATUS = {
+    "PENDING": "CONFIRMED",
+    "CONFIRMED": "INPROGRESS",
+    "INPROGRESS": "SHIPPED",
+    "SHIPPED": "DELIVERED",
+    "DELIVERED": "COMPLETED",
+}
+CANCELLABLE_BY_ADMIN = {"PENDING", "CONFIRMED", "INPROGRESS", "SHIPPED"}
 
 
 class OrderService:
@@ -330,6 +341,23 @@ class OrderService:
                     raise ValueError("Bạn đã sử dụng mã giảm giá này rồi")
                 promotion_id = promo.id
 
+        after_promo = max(0.0, subtotal - discount_amount)
+        settings = get_settings()
+        point_val = max(0.0001, float(settings.LOYALTY_POINT_VALUE_VND or 1.0))
+        max_pct = min(100, max(0, int(settings.LOYALTY_MAX_ORDER_POINTS_DISCOUNT_PERCENT or 50)))
+        requested_pts = max(0, int(checkout_in.loyalty_points_to_redeem or 0))
+        actual_pts = 0
+        points_discount_amount = 0.0
+        if requested_pts > 0:
+            cap_vnd = min(after_promo, after_promo * (max_pct / 100.0))
+            max_pts = int(cap_vnd / point_val)
+            bal = await points_service.get_balance(db, user_id)
+            actual_pts = min(requested_pts, max_pts, bal)
+            points_discount_amount = round(float(actual_pts) * point_val, 2)
+            if points_discount_amount > after_promo:
+                points_discount_amount = float(after_promo)
+                actual_pts = int(after_promo / point_val) if point_val > 0 else 0
+
         if checkout_in.full_name and checkout_in.full_name.strip():
             user_full_name = checkout_in.full_name.strip()
         else:
@@ -345,7 +373,7 @@ class OrderService:
             await db.flush()
         shipping_fee = float(service.price or 0)
 
-        total = max(0.0, subtotal - discount_amount + shipping_fee)
+        total = max(0.0, after_promo - points_discount_amount + shipping_fee)
 
         payment = Payment(amount=total, method=PaymentMethod.COD, payment_status="PENDING")
         db.add(payment)
@@ -392,6 +420,19 @@ class OrderService:
                 user_id=user_id, promotion_id=promotion_id,
                 order_id=order.id, used_at=datetime.utcnow(),
             ))
+            pr = await promotion_repository.get(db, promotion_id)
+            if pr:
+                pr.used_count = int(pr.used_count or 0) + 1
+
+        if actual_pts > 0:
+            await points_service.subtract_points(
+                db,
+                user_id,
+                actual_pts,
+                reason=points_service.REASON_ORDER_CHECKOUT,
+                ref_type="order",
+                ref_id=order.id,
+            )
 
         for item in used_cart_items:
             await db.delete(item)
@@ -403,7 +444,15 @@ class OrderService:
 
         await notification_service.notify_checkout_placed_for_buyer(db, user_id, order.id)
         await notification_service.notify_admins_new_order(db, order.id)
-        return order, subtotal, discount_amount, shipping_fee, total
+        return (
+            order,
+            subtotal,
+            discount_amount,
+            shipping_fee,
+            total,
+            actual_pts,
+            points_discount_amount,
+        )
 
     # ── update status (admin) ────────────────────────────────
 
@@ -420,6 +469,24 @@ class OrderService:
         order = await self.repository.get(db, order_id)
         if not order:
             return None
+        current = str(order.status).replace("OrderStatus.", "")
+        if current == new_status:
+            return order
+
+        terminal_states = {"CANCELLED", "COMPLETED", "RETURNED"}
+        if current in terminal_states:
+            raise ValueError(f"Không thể đổi trạng thái từ {current}")
+
+        if new_status == "CANCELLED":
+            if current not in CANCELLABLE_BY_ADMIN:
+                raise ValueError(f"Không thể hủy đơn ở trạng thái {current}")
+        else:
+            expected_next = NEXT_PROGRESS_STATUS.get(current)
+            if expected_next is None or new_status != expected_next:
+                raise ValueError(
+                    f"Chỉ được xúc tiến trạng thái kế tiếp từ {current} sang {expected_next or 'N/A'}"
+                )
+
         order.status = new_status
         self._add_history(db, order_id, new_status, description)
         await db.flush()

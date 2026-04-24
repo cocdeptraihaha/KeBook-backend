@@ -35,6 +35,14 @@ class PromotionService:
         if getattr(promo, "owner_user_id", None) is not None:
             if user_id is None or int(user_id) != int(promo.owner_user_id):
                 return None, 0, "Chỉ chủ tài khoản mới được dùng mã này"
+        min_amt = getattr(promo, "min_order_amount", None) or 0
+        if min_amt > 0 and float(order_total) < float(min_amt):
+            return None, 0, f"Đơn chưa đạt giá trị tối thiểu {float(min_amt):,.0f}đ để dùng mã này"
+        usage_limit = getattr(promo, "usage_limit", None)
+        if usage_limit is not None and int(usage_limit) > 0:
+            used = int(getattr(promo, "used_count", 0) or 0)
+            if used >= int(usage_limit):
+                return None, 0, "Mã khuyến mãi đã hết lượt sử dụng"
         discount = 0
         if promo.discount_percent:
             discount = order_total * (promo.discount_percent / 100)

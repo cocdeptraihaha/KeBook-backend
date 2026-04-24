@@ -133,9 +133,15 @@ async def checkout_from_cart(
 ):
     """Checkout from cart - create order from cart."""
     try:
-        order, item_amount, discount_total, shipping_fee, total_amount = (
-            await order_service.checkout_from_cart(db, current_user.id, checkout_in)
-        )
+        (
+            order,
+            item_amount,
+            discount_total,
+            shipping_fee,
+            total_amount,
+            loyalty_points_redeemed,
+            points_discount_amount,
+        ) = await order_service.checkout_from_cart(db, current_user.id, checkout_in)
         full_order = await order_service.get_order(db, order.id, current_user.id)
         if not full_order:
             full_order = order
@@ -146,6 +152,8 @@ async def checkout_from_cart(
             discount_total=discount_total,
             shipping_fee=shipping_fee,
             total_amount=total_amount,
+            loyalty_points_redeemed=loyalty_points_redeemed,
+            points_discount_amount=points_discount_amount,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -322,9 +330,12 @@ async def admin_update_order_status(
     current_user: User = Depends(get_current_superuser),
 ):
     """Admin: cập nhật trạng thái đơn."""
-    order = await order_service.update_status(
-        db, order_id, body.status, current_user.id, description=body.description
-    )
+    try:
+        order = await order_service.update_status(
+            db, order_id, body.status, current_user.id, description=body.description
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not order:
         raise HTTPException(status_code=404, detail="Order not found or invalid status")
     return order

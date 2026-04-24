@@ -51,6 +51,8 @@ class CheckoutRequest(BaseModel):
     province: Optional[str] = None
     ward: Optional[str] = None
     promotion_code: Optional[str] = None
+    """Số điểm tích lũy muốn đổi (VND giảm = điểm × LOYALTY_POINT_VALUE_VND), sau voucher, trong trần %."""
+    loyalty_points_to_redeem: Optional[int] = None
     items: Optional[List[CheckoutItemIn]] = None
 
 
@@ -120,6 +122,8 @@ class OrderCheckoutOut(BaseModel):
     discount_total: float
     shipping_fee: float
     total_amount: float
+    loyalty_points_redeemed: int = 0
+    points_discount_amount: float = 0.0
 
 
 class MoneyBucket(BaseModel):
