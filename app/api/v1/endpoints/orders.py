@@ -7,10 +7,13 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
+from app.models.book import Book
+from app.models.book_detail import BookDetail
 from app.models.user import User
 from app.repositories.user_repository import user_repository
 from app.schemas.order import (
@@ -56,27 +59,20 @@ async def get_my_orders(
     orders = await order_service.get_user_orders(
         db, current_user.id, skip, limit, status=use_status, statuses=statuses_list
     )
-    return [
-        OrderWithItems.model_validate(
-            {
-                **Order.model_validate(o).model_dump(),
-                "order_items": [
-                    {
-                        "id": oi.id,
-                        "order_id": oi.order_id,
-                        "book_id": oi.book_id,
-                        "book_title": oi.book_title,
-                        "quantity": oi.quantity,
-                        "price": float(oi.price or 0),
-                        "deleted_at": oi.deleted_at,
-                    }
-                    for oi in (o.order_items or [])
-                ],
-                "status_history": [],
-            }
+    out: list[OrderWithItems] = []
+    for o in orders:
+        out.append(
+            OrderWithItems.model_validate(
+                {
+                    **Order.model_validate(o).model_dump(),
+                    "order_items": await _build_order_items_payload(
+                        db, o.order_items or []
+                    ),
+                    "status_history": [],
+                }
+            )
         )
-        for o in orders
-    ]
+    return out
 
 
 @router.get("/me/stats", response_model=OrderMoneyStats)
@@ -145,7 +141,7 @@ async def checkout_from_cart(
         full_order = await order_service.get_order(db, order.id, current_user.id)
         if not full_order:
             full_order = order
-        order_data = _serialize_order_with_items(full_order)
+        order_data = await _serialize_order_with_items(db, full_order)
         return OrderCheckoutOut(
             order=order_data,
             item_amount=item_amount,
@@ -205,27 +201,20 @@ async def admin_list_orders(
         user_id=user_id,
         q=q,
     )
-    return [
-        OrderWithItems.model_validate(
-            {
-                **Order.model_validate(o).model_dump(),
-                "order_items": [
-                    {
-                        "id": oi.id,
-                        "order_id": oi.order_id,
-                        "book_id": oi.book_id,
-                        "book_title": oi.book_title,
-                        "quantity": oi.quantity,
-                        "price": float(oi.price or 0),
-                        "deleted_at": oi.deleted_at,
-                    }
-                    for oi in (o.order_items or [])
-                ],
-                "status_history": [],
-            }
+    out: list[OrderWithItems] = []
+    for o in orders:
+        out.append(
+            OrderWithItems.model_validate(
+                {
+                    **Order.model_validate(o).model_dump(),
+                    "order_items": await _build_order_items_payload(
+                        db, o.order_items or []
+                    ),
+                    "status_history": [],
+                }
+            )
         )
-        for o in orders
-    ]
+    return out
 
 
 @router.get("/admin/export.csv")
@@ -291,7 +280,7 @@ async def admin_get_order(
     order = await order_service.get_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return _serialize_order_with_items(order)
+    return await _serialize_order_with_items(db, order)
 
 
 @router.patch("/admin/{order_id}/shipment", response_model=Order)
@@ -372,7 +361,7 @@ async def get_order(
     order = await order_service.get_order(db, order_id, current_user.id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return _serialize_order_with_items(order)
+    return await _serialize_order_with_items(db, order)
 
 
 @router.post("/{order_id}/cancel", response_model=Order)
@@ -394,7 +383,7 @@ async def cancel_order(
 
 # ── helpers ─────────────────────────────────────────────────
 
-def _serialize_order_with_items(order) -> OrderWithItems:
+async def _serialize_order_with_items(db: AsyncSession, order) -> OrderWithItems:
     """Convert ORM order to schema, mapping status_history correctly."""
     history_out = [
         OrderStatusHistoryOut.from_orm_model(h)
@@ -403,18 +392,38 @@ def _serialize_order_with_items(order) -> OrderWithItems:
     return OrderWithItems.model_validate(
         {
             **Order.model_validate(order).model_dump(),
-            "order_items": [
-                {
-                    "id": oi.id,
-                    "order_id": oi.order_id,
-                    "book_id": oi.book_id,
-                    "book_title": oi.book_title,
-                    "quantity": oi.quantity,
-                    "price": float(oi.price or 0),
-                    "deleted_at": oi.deleted_at,
-                }
-                for oi in (order.order_items or [])
-            ],
+            "order_items": await _build_order_items_payload(
+                db, order.order_items or []
+            ),
             "status_history": [h.model_dump() for h in history_out],
         }
     )
+
+
+async def _build_order_items_payload(db: AsyncSession, order_items) -> list[dict]:
+    book_ids = sorted({oi.book_id for oi in order_items if oi.book_id is not None})
+    image_map: dict[int, str | None] = {}
+    if book_ids:
+        result = await db.execute(
+            select(Book.id, BookDetail.image_url)
+            .select_from(Book)
+            .outerjoin(BookDetail, Book.book_detail_id == BookDetail.id)
+            .where(Book.id.in_(book_ids))
+        )
+        image_map = {int(book_id): image_url for book_id, image_url in result.all()}
+
+    out: list[dict] = []
+    for oi in order_items:
+        out.append(
+            {
+                "id": oi.id,
+                "order_id": oi.order_id,
+                "book_id": oi.book_id,
+                "book_title": oi.book_title,
+                "image_url": image_map.get(int(oi.book_id)) if oi.book_id else None,
+                "quantity": oi.quantity,
+                "price": float(oi.price or 0),
+                "deleted_at": oi.deleted_at,
+            }
+        )
+    return out

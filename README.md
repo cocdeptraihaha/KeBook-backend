@@ -81,6 +81,8 @@ cp .env.example .env    # Linux/macOS
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 - API: `http://localhost:8000`  
 - Swagger UI: `http://localhost:8000/docs`  
 - ReDoc: `http://localhost:8000/redoc`  
@@ -164,6 +166,48 @@ Ví dụ:
 
 ---
 
+## 4.1 API modules chính (v1)
+
+- **Auth**: `/api/v1/auth/*` (register, verify-otp, login, forgot/reset password)
+- **Users**: `/api/v1/users/*` (me, admin user management, points adjust)
+- **Books / Categories / Cart**: `/api/v1/books/*`, `/api/v1/categories/*`, `/api/v1/cart/*`
+- **Orders**: `/api/v1/orders/*` (checkout, my orders, admin orders, status)
+- **Promotions**: `/api/v1/promotions/*` (create/list/update, issue user, stats)
+- **Points / Rewards**: `/api/v1/points/*` (admin reward CRUD, user redeem)
+- **Return Requests**: `/api/v1/return-requests/*` (user create/list, admin process)
+- **Notifications / Support**: `/api/v1/notifications/*`, `/api/v1/support-requests/*`
+
+---
+
+## 4.2 Postman test kit
+
+Repo đã có sẵn bộ Postman để test API:
+
+- Collection: `postman/Backend_Kebook_API.postman_collection.json`
+- Environment local: `postman/Backend_Kebook_Local.postman_environment.json`
+
+### Cách chạy nhanh
+
+1. Import cả **collection** và **environment** vào Postman.
+2. Chọn environment `KeBook Local`.
+3. Chạy theo thứ tự:
+   - `Auth / Login User`
+   - `Auth / Login Admin`
+4. Collection tự lưu token vào biến:
+   - `user_token`
+   - `admin_token`
+5. Với các API phụ thuộc dữ liệu (`order_id`, `order_item_id`, `promotion_id`), cập nhật biến theo dữ liệu thực tế DB.
+
+### Nhóm request đã có trong collection
+
+- Auth, Users Admin
+- Promotions
+- Point Rewards
+- Orders
+- Return Requests (create/list/process)
+
+---
+
 ## 5. Quên mật khẩu (OTP)
 
 ### Gửi OTP reset password
@@ -205,30 +249,45 @@ app/
 │           ├── users.py     # CRUD users (cần JWT)
 │           ├── books.py     # Sách (public + admin)
 │           ├── categories.py
-│           ├── cart.py       # Giỏ hàng
-│           ├── orders.py     # Đơn hàng, checkout
-│           ├── reviews.py    # Đánh giá sách
+│           ├── cart.py        # Giỏ hàng
+│           ├── orders.py      # Đơn hàng, checkout
+│           ├── reviews.py     # Đánh giá sách
 │           ├── promotions.py
+│           ├── points.py      # Điểm tích lũy, rewards
 │           ├── return_requests.py
 │           ├── notifications.py
 │           ├── support_requests.py
+│           ├── admin_dashboard.py
 │           └── test_utils.py # Test-only (OTP, make-admin)
 ├── core/
 │   ├── config.py            # Settings từ .env
 │   ├── database.py          # Async SQLAlchemy, get_db
 │   └── security.py          # JWT, hash password
 ├── models/
-│   ├── otp.py               # Model OTP
-│   └── user.py              # Model User
+│   ├── otp.py                # Model OTP
+│   ├── user.py               # Model User
+│   ├── order.py              # Model Order
+│   ├── promotion.py          # Model Promotion
+│   └── return_request.py     # Model ReturnRequest
 ├── schemas/
-│   └── user.py              # Pydantic schemas
+│   ├── user.py               # Pydantic schemas user/auth
+│   ├── order.py
+│   ├── promotion.py
+│   └── return_request.py
 ├── repositories/            # Data access
 │   ├── base_repository.py
-│   └── user_repository.py
+│   ├── user_repository.py
+│   ├── order_repository.py
+│   ├── promotion_repository.py
+│   └── return_request_repository.py
 ├── services/                # Business logic
 │   ├── email_service.py
 │   ├── otp_service.py
-│   └── user_service.py
+│   ├── user_service.py
+│   ├── order_service.py
+│   ├── promotion_service.py
+│   ├── points_service.py
+│   └── return_request_service.py
 └── main.py                  # FastAPI app, CORS, lifespan
 ```
 
@@ -263,4 +322,4 @@ pytest -v
 - Database: nếu dùng MySQL (`aiomysql`) hãy đảm bảo MySQL đã chạy và tạo database trước (ví dụ `CREATE DATABASE kebook;`).  
 - CORS đang cho phép mọi origin (`*`); production nên giới hạn domain.
 
-Nếu cần thêm endpoint hoặc đổi cấu trúc, có thể mở rộng từ template này (thêm model, repository, service, router tương tự `users`).
+Nếu cần thêm endpoint hoặc đổi cấu trúc, có thể mở rộng theo pattern hiện tại (endpoint → schema → service → repository).

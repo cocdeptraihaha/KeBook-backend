@@ -17,6 +17,7 @@ class OrderItemCreate(OrderItemBase):
 class OrderItem(OrderItemBase):
     id: int
     book_title: Optional[str] = None
+    image_url: Optional[str] = None
     order_id: Optional[int] = None
     deleted_at: Optional[datetime] = None
 

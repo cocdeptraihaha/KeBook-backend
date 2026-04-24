@@ -1,137 +1,287 @@
 {
   "info": {
     "name": "Backend Kebook API",
-    "description": "Collection test API: Register, Verify OTP, Login, Forgot/Reset Password, Users",
+    "description": "Postman test kit for KeBook backend (auth, users, orders, points, promotions, return-requests).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8000/api/v1"
-    },
-    {
-      "key": "token",
-      "value": ""
-    },
-    {
-      "key": "email",
-      "value": "test@example.com"
-    }
+    { "key": "base_url", "value": "http://localhost:8000/api/v1" },
+    { "key": "user_email", "value": "test@example.com" },
+    { "key": "user_password", "value": "Test123!@#" },
+    { "key": "admin_email", "value": "admin@example.com" },
+    { "key": "admin_password", "value": "Admin123!@#" },
+    { "key": "user_token", "value": "" },
+    { "key": "admin_token", "value": "" },
+    { "key": "user_id", "value": "1" },
+    { "key": "order_id", "value": "1" },
+    { "key": "order_item_id", "value": "1" },
+    { "key": "promotion_id", "value": "1" },
+    { "key": "return_request_id", "value": "1" }
   ],
   "item": [
     {
       "name": "Auth",
       "item": [
         {
-          "name": "Register",
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login user status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.access_token) pm.collectionVariables.set('user_token', json.access_token);",
+                  "if (json.user && json.user.id) pm.collectionVariables.set('user_id', String(json.user.id));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"username\": \"testuser\",\n  \"password\": \"test123\",\n  \"full_name\": \"Test User\"\n}"
-            },
-            "url": "{{base_url}}/auth/register",
-            "description": "Đăng ký user mới. OTP gửi qua email (hoặc in console)."
-          }
-        },
-        {
-          "name": "Verify OTP",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp_code\": \"123456\"\n}"
-            },
-            "url": "{{base_url}}/auth/verify-otp",
-            "description": "Verify OTP để kích hoạt tài khoản. Thay 123456 bằng mã OTP thật."
-          }
-        },
-        {
-          "name": "Login",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "username", "value": "{{email}}" },
-                { "key": "password", "value": "test123" }
+                { "key": "username", "value": "{{user_email}}" },
+                { "key": "password", "value": "{{user_password}}" }
               ]
             },
-            "url": "{{base_url}}/auth/login",
-            "description": "Đăng nhập. Sau khi chạy, copy access_token vào biến token."
+            "url": "{{base_url}}/auth/login"
           }
         },
         {
-          "name": "Forgot Password",
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login admin status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.access_token) pm.collectionVariables.set('admin_token', json.access_token);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "username", "value": "{{admin_email}}" },
+                { "key": "password", "value": "{{admin_password}}" }
+              ]
             },
-            "url": "{{base_url}}/auth/forgot-password",
-            "description": "Gửi OTP reset password qua email."
+            "url": "{{base_url}}/auth/login"
           }
         },
         {
-          "name": "Reset Password",
+          "name": "Me (User)",
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp_code\": \"123456\",\n  \"new_password\": \"newpass123\"\n}"
-            },
-            "url": "{{base_url}}/auth/reset-password",
-            "description": "Reset password với OTP. Thay 123456 bằng mã OTP từ email."
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }],
+            "url": "{{base_url}}/users/me"
           }
         }
       ]
     },
     {
-      "name": "Users",
+      "name": "Users Admin",
       "item": [
         {
-          "name": "Get Current User (me)",
+          "name": "List Users",
           "request": {
             "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/users/admin/all?skip=0&limit=20"
+          }
+        },
+        {
+          "name": "Adjust User Points",
+          "request": {
+            "method": "POST",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
-            "url": "{{base_url}}/users/me",
-            "description": "Lấy thông tin user đang đăng nhập. Cần token từ Login hoặc Verify OTP."
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": 100,\n  \"reason\": \"POSTMAN_TEST\"\n}"
+            },
+            "url": "{{base_url}}/users/admin/{{user_id}}/points-adjust"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Promotions",
+      "item": [
+        {
+          "name": "Create Promotion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create promotion status 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.id) pm.collectionVariables.set('promotion_id', String(json.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"POSTMAN10\",\n  \"name\": \"Postman Promotion\",\n  \"discount_percent\": 10,\n  \"max_discount\": 50000,\n  \"start_date\": \"2026-01-01T00:00:00\",\n  \"end_date\": \"2026-12-31T23:59:59\"\n}"
+            },
+            "url": "{{base_url}}/promotions/"
+          }
+        },
+        {
+          "name": "Issue Promotion To User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{user_id}},\n  \"promotion_id\": {{promotion_id}}\n}"
+            },
+            "url": "{{base_url}}/promotions/admin/issue"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Point Rewards",
+      "item": [
+        {
+          "name": "Create Point Reward",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"POSTMAN_REWARD\",\n  \"cost_points\": 200,\n  \"discount_percent\": 15,\n  \"max_discount\": 30000,\n  \"valid_days\": 30,\n  \"active\": true\n}"
+            },
+            "url": "{{base_url}}/points/admin/rewards"
+          }
+        },
+        {
+          "name": "List Point Rewards",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/points/admin/rewards?skip=0&limit=50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List My Orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }],
+            "url": "{{base_url}}/orders?skip=0&limit=20"
+          }
+        },
+        {
+          "name": "Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }],
+            "url": "{{base_url}}/orders/{{order_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Return Requests",
+      "item": [
+        {
+          "name": "Create Return Request (User)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create return request status 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "if (json.id) pm.collectionVariables.set('return_request_id', String(json.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{user_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": {{order_id}},\n  \"order_item_id\": {{order_item_id}},\n  \"quantity\": 1,\n  \"reason\": \"POSTMAN_TEST_RETURN\"\n}"
+            },
+            "url": "{{base_url}}/return-requests/"
+          }
+        },
+        {
+          "name": "List My Return Requests",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{user_token}}" }],
+            "url": "{{base_url}}/return-requests/?skip=0&limit=50"
+          }
+        },
+        {
+          "name": "Admin List Return Requests",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": "{{base_url}}/return-requests/admin/all?skip=0&limit=50"
+          }
+        },
+        {
+          "name": "Admin Approve Return Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            },
+            "url": "{{base_url}}/return-requests/{{return_request_id}}/process"
           }
         }
       ]
