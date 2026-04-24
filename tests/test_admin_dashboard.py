@@ -28,7 +28,24 @@ def test_cancellation_timeseries_ok(client: TestClient, admin_headers: dict):
     r = client.get(
         "/api/v1/admin/dashboard/cancellation-timeseries",
         headers=admin_headers,
-        params={"group_by": "day"},
+        params={"group_by": "day", "to": "2099-01-01"},
     )
     assert r.status_code == 200
-    assert r.json() == []
+    rows = r.json()
+    assert len(rows) == 14
+    assert rows[0]["period"] == "2098-12-19"
+    assert rows[-1]["period"] == "2099-01-01"
+    assert all(float(x["cancel_rate"]) == 0.0 for x in rows)
+
+
+def test_user_timeseries_always_14_days(client: TestClient, admin_headers: dict):
+    r = client.get(
+        "/api/v1/admin/dashboard/user-timeseries",
+        headers=admin_headers,
+        params={"group_by": "day", "to": "2099-01-01"},
+    )
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) == 14
+    assert rows[0]["period"] == "2098-12-19"
+    assert rows[-1]["period"] == "2099-01-01"

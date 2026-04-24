@@ -1,5 +1,5 @@
 """Tổng hợp số liệu dashboard admin."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import case, func, select
@@ -182,6 +182,35 @@ class AdminDashboardService:
         group_by: str = "day",
     ) -> List[dict]:
         gb = (group_by or "day").lower()
+        if gb == "day":
+            end = to_dt or datetime.utcnow()
+            end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
+            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+
+            stmt = (
+                select(func.date(User.created_at).label("period"), func.count(User.id))
+                .where(
+                    User.deleted_at.is_(None),
+                    User.created_at >= start_day,
+                    User.created_at <= end_day,
+                )
+                .group_by(func.date(User.created_at))
+                .order_by(func.date(User.created_at))
+            )
+            r = await db.execute(stmt)
+            per: dict[str, int] = {}
+            for period, cnt in r.all():
+                key = period.isoformat() if hasattr(period, "isoformat") else str(period)
+                per[key] = int(cnt or 0)
+
+            return [
+                {
+                    "period": (start_day + timedelta(days=i)).date().isoformat(),
+                    "new_users": per.get((start_day + timedelta(days=i)).date().isoformat(), 0),
+                }
+                for i in range(14)
+            ]
+
         if gb == "month":
             period_expr = func.date_format(User.created_at, "%Y-%m-01")
         elif gb == "week":
@@ -298,6 +327,50 @@ class AdminDashboardService:
         group_by: str = "day",
     ) -> List[dict]:
         gb = (group_by or "day").lower()
+        if gb == "day":
+            end = to_dt or datetime.utcnow()
+            end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
+            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+            cancelled_cond = Order.status.in_(
+                [OrderStatus.CANCELLED, OrderStatus.CANCEL_REQUESTED]
+            )
+            stmt = (
+                select(
+                    func.date(Order.order_date).label("period"),
+                    func.count(Order.id).label("total_orders"),
+                    func.coalesce(func.sum(case((cancelled_cond, 1), else_=0)), 0).label(
+                        "cancelled_count"
+                    ),
+                )
+                .where(
+                    Order.deleted_at.is_(None),
+                    Order.order_date >= start_day,
+                    Order.order_date <= end_day,
+                )
+                .group_by(func.date(Order.order_date))
+                .order_by(func.date(Order.order_date))
+            )
+            result = await db.execute(stmt)
+            per: dict[str, tuple[int, int]] = {}
+            for period, total_o, cancelled in result.all():
+                key = period.isoformat() if hasattr(period, "isoformat") else str(period)
+                per[key] = (int(total_o or 0), int(cancelled or 0))
+
+            out: List[dict] = []
+            for i in range(14):
+                key = (start_day + timedelta(days=i)).date().isoformat()
+                tot, canc = per.get(key, (0, 0))
+                rate = (canc / tot) if tot else 0.0
+                out.append(
+                    {
+                        "period": key,
+                        "total_orders": tot,
+                        "cancelled_count": canc,
+                        "cancel_rate": round(rate, 4),
+                    }
+                )
+            return out
+
         if gb == "month":
             period_expr = func.date_format(Order.order_date, "%Y-%m-01")
         elif gb == "week":

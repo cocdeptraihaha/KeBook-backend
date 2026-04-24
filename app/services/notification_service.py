@@ -1,10 +1,11 @@
 """Notification service."""
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.business.business_rules import NOTIFICATION_WS_SCHEMA_VERSION
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.user_notification import UserNotification
@@ -23,18 +24,41 @@ class NotificationService:
         self.repository = notification_repository
         self.user_notif_repo = user_notification_repository
 
+    @staticmethod
+    def _meta_from_message(message: Optional[str]) -> Dict[str, Any]:
+        """Parse các dòng key:value số (vd order_id:1) thành dict cho client."""
+        out: Dict[str, Any] = {}
+        if not message:
+            return out
+        for line in message.split("\n"):
+            part = line.strip()
+            if ":" not in part:
+                continue
+            key, _, rest = part.partition(":")
+            k = key.strip()
+            v = rest.strip()
+            if not k:
+                continue
+            if v.isdigit() or (v.startswith("-") and v[1:].isdigit()):
+                out[k] = int(v)
+            else:
+                out[k] = v
+        return out
+
     async def _build_new_notif_payload(
         self, db: AsyncSession, notif: Notification, user_id: int
     ) -> dict:
         unread = await self.user_notif_repo.count_unread(db, user_id)
         return {
             "type": "new_notification",
+            "schema_version": NOTIFICATION_WS_SCHEMA_VERSION,
             "id": notif.id,
             "title": notif.title or "",
             "message": notif.message or "",
             "notif_type": notif.type or "INFO",
             "send_date": notif.send_date.isoformat() if notif.send_date else None,
             "unread_count": unread,
+            "meta": self._meta_from_message(notif.message or ""),
         }
 
     async def push_unread_sync(self, db: AsyncSession, user_id: int) -> None:

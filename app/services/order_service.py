@@ -1,5 +1,5 @@
 """Order service."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Iterable, Tuple
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -653,6 +653,49 @@ class OrderService:
         from app.models.order import OrderStatus
 
         gb = (group_by or "day").lower()
+        if gb == "day":
+            # Always return the latest 14-day window for dashboard chart.
+            # Missing days are returned with zero values.
+            end = to_dt or datetime.utcnow()
+            end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
+            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+
+            period_expr = func.date(Order.order_date)
+            stmt = (
+                select(
+                    period_expr.label("period"),
+                    func.count(Order.id),
+                    func.coalesce(func.sum(Order.total_price), 0.0),
+                )
+                .where(
+                    Order.deleted_at.is_(None),
+                    Order.status.in_([OrderStatus.DELIVERED, OrderStatus.COMPLETED]),
+                    Order.order_date >= start_day,
+                    Order.order_date <= end_day,
+                )
+                .group_by(period_expr)
+                .order_by(period_expr)
+            )
+            result = await db.execute(stmt)
+            data_by_period: dict[str, tuple[int, float]] = {}
+            for period, cnt, total in result.all():
+                key = period.isoformat() if hasattr(period, "isoformat") else str(period)
+                data_by_period[key] = (int(cnt), float(total or 0))
+
+            out: List[dict] = []
+            for i in range(14):
+                day = start_day + timedelta(days=i)
+                key = day.date().isoformat()
+                cnt, total = data_by_period.get(key, (0, 0.0))
+                out.append(
+                    {
+                        "period": key,
+                        "order_count": cnt,
+                        "revenue": total,
+                    }
+                )
+            return out
+
         if gb == "month":
             period_expr = func.date_format(Order.order_date, "%Y-%m-01")
         elif gb == "week":
