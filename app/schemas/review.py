@@ -47,6 +47,10 @@ class EligibilityResponse(BaseModel):
     eligible: bool
     already_reviewed: bool
     last_delivered_at: Optional[datetime] = None
+    reward_points_on_submit: int = Field(
+        0,
+        description="Điểm tặng khi gửi review hợp lệ lần đầu (0 nếu không đủ điều kiện hoặc tắt thưởng).",
+    )
 
 
 class BookAvgRateOut(BaseModel):

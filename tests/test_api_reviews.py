@@ -98,7 +98,9 @@ def test_create_review_delivered_plus_5d(client: TestClient, auth_headers):
         headers=auth_headers,
     )
     assert r.status_code == 200
-    assert r.json()["eligible"] is True
+    el = r.json()
+    assert el["eligible"] is True
+    assert el.get("reward_points_on_submit", 0) >= 0
 
     r2 = client.post(
         "/api/v1/reviews/",
@@ -110,6 +112,17 @@ def test_create_review_delivered_plus_5d(client: TestClient, auth_headers):
     assert data["book_id"] == book_id
     assert data["rate"] == 5
     assert data["content"] == "Rất hay"
+
+    txs = client.get("/api/v1/users/me/point-transactions", headers=auth_headers)
+    assert txs.status_code == 200
+    review_rewards = [
+        t
+        for t in txs.json()
+        if t.get("reason") == "REVIEW_REWARD"
+        and t.get("ref_type") == "review"
+        and t.get("ref_id") == data["id"]
+    ]
+    assert len(review_rewards) == 1
 
 
 def test_duplicate_review_400(client: TestClient, auth_headers):

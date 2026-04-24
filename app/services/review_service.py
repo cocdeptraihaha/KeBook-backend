@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.business.business_rules import get_review_window_days
+from app.core.config import get_settings
 from app.models.review import Review
 from app.schemas.review import EligibilityResponse, ReviewCreate, ReviewUpdate
 from app.repositories.review_repository import review_repository
@@ -24,8 +26,9 @@ class ReviewService:
         )
         if existing:
             raise ValueError("You have already reviewed this book")
+        w = get_review_window_days()
         can_create, _already, _last = await self.repository.get_user_book_eligibility(
-            db, user_id, review_in.book_id, window_days=30
+            db, user_id, review_in.book_id, window_days=w
         )
         if not can_create:
             raise ValueError("Not eligible to review this book")
@@ -64,15 +67,24 @@ class ReviewService:
         return await self.repository.count_by_book(db, book_id)
 
     async def get_eligibility(
-        self, db: AsyncSession, user_id: int, book_id: int, window_days: int = 30
+        self,
+        db: AsyncSession,
+        user_id: int,
+        book_id: int,
+        window_days: Optional[int] = None,
     ) -> EligibilityResponse:
+        w = window_days if window_days is not None else get_review_window_days()
         can_create, already, last_at = await self.repository.get_user_book_eligibility(
-            db, user_id, book_id, window_days=window_days
+            db, user_id, book_id, window_days=w
         )
+        reward = 0
+        if can_create and not already:
+            reward = max(0, int(get_settings().REVIEW_REWARD_POINTS or 0))
         return EligibilityResponse(
             eligible=can_create,
             already_reviewed=already,
             last_delivered_at=last_at,
+            reward_points_on_submit=reward,
         )
 
     async def get_my_review_by_book(

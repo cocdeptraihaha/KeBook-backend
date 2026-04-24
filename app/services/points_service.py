@@ -11,6 +11,7 @@ class PointsService:
     REASON_REVIEW = "REVIEW_REWARD"
     REASON_REDEEM = "REDEEM_VOUCHER"
     REASON_ADMIN = "ADMIN_ADJUST"
+    REASON_ORDER_CHECKOUT = "ORDER_CHECKOUT_REDEEM"
 
     async def get_balance(self, db: AsyncSession, user_id: int) -> int:
         r = await db.execute(
@@ -119,6 +120,14 @@ class PointsService:
         settings = get_settings()
         n = max(0, int(settings.REVIEW_REWARD_POINTS or 0))
         if n == 0:
+            return await self.get_balance(db, user_id)
+        if await point_transaction_repository.exists_for_ref(
+            db,
+            user_id=user_id,
+            reason=self.REASON_REVIEW,
+            ref_type="review",
+            ref_id=review_id,
+        ):
             return await self.get_balance(db, user_id)
         return await self.add_points(
             db,

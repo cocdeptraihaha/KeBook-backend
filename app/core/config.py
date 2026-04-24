@@ -29,6 +29,14 @@ class Settings(BaseSettings):
 
     # Điểm tặng khi tạo đánh giá mới (không tặng khi sửa review)
     REVIEW_REWARD_POINTS: int = 10
+    # Cửa sổ ngày sau khi giao để được review (GET eligible + POST review)
+    REVIEW_WINDOW_DAYS: int = 30
+    # Ghi nhận lượt xem: tối thiểu bao nhiêu phút giữa hai lần count cho cùng user+book
+    BOOK_VIEW_DEBOUNCE_MINUTES: int = 30
+    # Mỗi điểm tích lũy đổi được bao nhiêu VND giảm trên đơn (checkout)
+    LOYALTY_POINT_VALUE_VND: float = 1.0
+    # Trần % giá trị đơn (sau voucher) có thể trừ bằng điểm
+    LOYALTY_MAX_ORDER_POINTS_DISCOUNT_PERCENT: int = 50
 
     class Config:
         env_file = ".env"

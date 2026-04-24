@@ -1,5 +1,5 @@
 """Point transaction repository."""
-from typing import List
+from typing import List, Optional
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,31 @@ class PointTransactionRepository:
         await db.flush()
         await db.refresh(row)
         return row
+
+    async def exists_for_ref(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        reason: str,
+        ref_type: Optional[str],
+        ref_id: Optional[int],
+    ) -> bool:
+        """Idempotency: đã có giao dịch cùng reason + ref?"""
+        stmt = select(PointTransaction.id).where(
+            PointTransaction.user_id == user_id,
+            PointTransaction.reason == reason,
+        )
+        if ref_type is not None:
+            stmt = stmt.where(PointTransaction.ref_type == ref_type)
+        else:
+            stmt = stmt.where(PointTransaction.ref_type.is_(None))
+        if ref_id is not None:
+            stmt = stmt.where(PointTransaction.ref_id == ref_id)
+        else:
+            stmt = stmt.where(PointTransaction.ref_id.is_(None))
+        r = await db.execute(stmt.limit(1))
+        return r.scalar_one_or_none() is not None
 
     async def list_by_user(
         self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 50
