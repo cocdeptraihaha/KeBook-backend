@@ -199,6 +199,18 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         view_count = int(r_view.scalar() or 0)
         return buyer_count, review_count, view_count
 
+    async def _similar_book_ids_fallback(
+        self, db: AsyncSession, book_id: int, pool_limit: int
+    ) -> List[int]:
+        """Sách khác đang active (khi không có thể loại / không có cùng category)."""
+        r_ob = await db.execute(
+            select(Book.id)
+            .where(Book.id != book_id, Book.deleted_at.is_(None))
+            .order_by(Book.id.desc())
+            .limit(pool_limit)
+        )
+        return [row[0] for row in r_ob.all()]
+
     async def get_similar_books(
         self, db: AsyncSession, book_id: int, limit: int = 10
     ) -> List[Book]:
@@ -206,19 +218,21 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
             select(BookCategory.category_id).where(BookCategory.book_id == book_id)
         )
         cat_ids = [row[0] for row in r_cat.all()]
-        if not cat_ids:
-            return []
-        r_ids = await db.execute(
-            select(Book.id)
-            .join(BookCategory, BookCategory.book_id == Book.id)
-            .where(
-                BookCategory.category_id.in_(cat_ids),
-                Book.id != book_id,
-                Book.deleted_at.is_(None),
+        ids: List[int] = []
+        if cat_ids:
+            r_ids = await db.execute(
+                select(Book.id)
+                .join(BookCategory, BookCategory.book_id == Book.id)
+                .where(
+                    BookCategory.category_id.in_(cat_ids),
+                    Book.id != book_id,
+                    Book.deleted_at.is_(None),
+                )
+                .distinct()
             )
-            .distinct()
-        )
-        ids = [row[0] for row in r_ids.all()]
+            ids = [row[0] for row in r_ids.all()]
+        if not ids:
+            ids = await self._similar_book_ids_fallback(db, book_id, pool_limit=max(30, limit * 3))
         if not ids:
             return []
         r_cnt = await db.execute(

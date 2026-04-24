@@ -1,6 +1,7 @@
 """Favorite (yêu thích) repository."""
 from typing import List, Optional, Set
 from sqlalchemy import select, delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,10 +15,16 @@ class FavoriteRepository:
         if existing:
             return existing
         row = Favorite(user_id=user_id, book_id=book_id)
-        db.add(row)
-        await db.flush()
-        await db.refresh(row)
-        return row
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            pass
+        out = await self.get_one(db, user_id, book_id)
+        if out:
+            return out
+        raise RuntimeError("favorite insert failed unexpectedly")
 
     async def remove(self, db: AsyncSession, user_id: int, book_id: int) -> bool:
         r = await db.execute(

@@ -110,7 +110,14 @@ async def record_book_view(
     book = await book_service.repository.get(db, book_id)
     if not book or book.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Book not found")
-    await book_view_repository.record(db, current_user.id, book_id)
+    from app.business.business_rules import get_book_view_debounce_minutes
+
+    await book_view_repository.record_if_debounced(
+        db,
+        current_user.id,
+        book_id,
+        debounce_minutes=get_book_view_debounce_minutes(),
+    )
     return None
 
 
