@@ -41,9 +41,7 @@ class EmailService:
     async def send_otp_email(email: str, otp_code: str, otp_type: str = "activation"):
         """Send email containing OTP. Chạy SMTP trong thread để không block event loop."""
         if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-            print(f"\n[SMTP] SMTP_USER/SMTP_PASSWORD not configured - printing OTP to console:")
-            print(f"  OTP for {email}: {otp_code} (type: {otp_type})")
-            print()
+            print("[SMTP] SMTP_USER/SMTP_PASSWORD not configured - OTP email skipped.")
             return True
 
         try:
@@ -52,7 +50,6 @@ class EmailService:
             return True
         except Exception as e:
             print(f"[SMTP] Send failed: {e}")
-            print(f"  OTP for {email}: {otp_code}")
             return False
 
 

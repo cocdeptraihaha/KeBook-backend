@@ -6,10 +6,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings from environment."""
 
+    ENV: str = "development"
     DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 90
     API_V1_STR: str = "/api/v1"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     
     # Email settings (cho gửi OTP)
     # Gmail: smtp.gmail.com, port 587, dùng App Password
@@ -26,6 +28,8 @@ class Settings(BaseSettings):
 
     # Cloudinary (upload ảnh). Format: cloudinary://api_key:api_secret@cloud_name
     CLOUDINARY_URL: str = ""
+    MYSQL_SSL_CA: str = ""
+    MYSQL_SSL_VERIFY: bool = True
 
     # Điểm tặng khi tạo đánh giá mới (không tặng khi sửa review)
     REVIEW_REWARD_POINTS: int = 10

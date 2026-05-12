@@ -88,7 +88,9 @@ async def register(
 
 
 @router.post("/verify-otp", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def verify_otp(
+    request_http: Request,
     request: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -132,7 +134,9 @@ async def verify_otp(
 
 
 @router.post("/resend-otp")
+@limiter.limit("5/minute")
 async def resend_otp(
+    request_http: Request,
     request: ResendOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -158,7 +162,9 @@ async def resend_otp(
 
 
 @router.post("/forgot-password")
+@limiter.limit("5/minute")
 async def forgot_password(
+    request_http: Request,
     request: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -180,7 +186,9 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
+@limiter.limit("10/minute")
 async def reset_password(
+    request_http: Request,
     request: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):

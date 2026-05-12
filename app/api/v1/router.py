@@ -1,5 +1,6 @@
 """API v1 router."""
 from fastapi import APIRouter
+from app.core.config import get_settings
 
 from app.api.v1.endpoints import (
     admin_dashboard,
@@ -45,4 +46,5 @@ api_router.include_router(return_requests.router, prefix="/return-requests", tag
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(support_requests.router, prefix="/support-requests", tags=["support-requests"])
 api_router.include_router(upload.router, prefix="/upload", tags=["upload"])
-api_router.include_router(test_utils.router, prefix="/test", tags=["test"])
+if get_settings().ENV == "test":
+    api_router.include_router(test_utils.router, prefix="/test", tags=["test"])

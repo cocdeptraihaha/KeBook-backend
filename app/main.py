@@ -22,6 +22,7 @@ import os
 from fastapi_pagination import add_pagination
 
 from app.api.v1.router import api_router
+from app.core.config import get_settings
 from app.api.ws_notifications import router as ws_notifications_router
 from app.core.database import database, AsyncSessionLocal
 from app.core.ratelimit import limiter
@@ -29,6 +30,11 @@ from app.services.otp_service import otp_service
 
 # Chu kỳ xóa OTP hết hạn (giây)
 OTP_CLEANUP_INTERVAL = 60
+
+
+def _parse_cors_origins(raw: str) -> list[str]:
+    origins = [item.strip() for item in (raw or "").split(",")]
+    return [item for item in origins if item]
 
 
 async def _periodic_otp_cleanup(stopped: asyncio.Event):
@@ -80,10 +86,14 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+settings = get_settings()
+cors_origins = _parse_cors_origins(settings.CORS_ORIGINS)
+allow_credentials = bool(cors_origins) and "*" not in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
