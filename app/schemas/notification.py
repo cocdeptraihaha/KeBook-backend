@@ -1,13 +1,38 @@
 """Notification schemas."""
-from pydantic import BaseModel
-from typing import Optional
+from __future__ import annotations
+
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field
+
+
+class NotificationType(str, Enum):
+    GENERIC = "GENERIC"
+
+    ORDER_NEW = "ORDER_NEW"
+    ORDER_SHIPMENT = "ORDER_SHIPMENT"
+
+    ORDER_STATUS_PENDING = "ORDER_STATUS_PENDING"
+    ORDER_STATUS_CONFIRMED = "ORDER_STATUS_CONFIRMED"
+    ORDER_STATUS_INPROGRESS = "ORDER_STATUS_INPROGRESS"
+    ORDER_STATUS_SHIPPED = "ORDER_STATUS_SHIPPED"
+    ORDER_STATUS_DELIVERED = "ORDER_STATUS_DELIVERED"
+    ORDER_STATUS_COMPLETED = "ORDER_STATUS_COMPLETED"
+    ORDER_STATUS_CANCELLED = "ORDER_STATUS_CANCELLED"
+    ORDER_STATUS_CANCEL_REQUESTED = "ORDER_STATUS_CANCEL_REQUESTED"
+    ORDER_STATUS_RETURNED = "ORDER_STATUS_RETURNED"
+
+    REVIEW_NEW = "REVIEW_NEW"
+    SUPPORT_NEW = "SUPPORT_NEW"
 
 
 class NotificationBase(BaseModel):
+    # message stores machine-readable JSON payload (ids/metadata).
     message: Optional[str] = None
     title: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[NotificationType] = None
 
 
 class NotificationCreate(NotificationBase):
@@ -24,7 +49,7 @@ class UserFilter(BaseModel):
 
 
 class NotificationBroadcastRequest(NotificationBase):
-    """Gửi hàng loạt: `user_ids` cụ thể, hoặc `user_filter`, hoặc bỏ cả hai = tất cả user."""
+    """Broadcast via user_ids, or user_filter, or all users."""
 
     user_ids: Optional[list[int]] = None
     user_filter: Optional[UserFilter] = None
@@ -36,6 +61,10 @@ class Notification(NotificationBase):
     deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class NotificationOut(Notification):
+    payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class UserNotificationBase(BaseModel):
@@ -50,5 +79,15 @@ class UserNotificationCreate(UserNotificationBase):
 class UserNotification(UserNotificationBase):
     is_read: Optional[bool] = None
     read_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class UserNotificationOut(BaseModel):
+    notification_id: int
+    user_id: int
+    is_read: Optional[bool] = None
+    read_at: Optional[datetime] = None
+    notification: NotificationOut
 
     model_config = {"from_attributes": True}

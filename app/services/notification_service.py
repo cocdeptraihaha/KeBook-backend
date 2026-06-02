@@ -1,4 +1,7 @@
 """Notification service."""
+from __future__ import annotations
+
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -9,28 +12,61 @@ from app.business.business_rules import NOTIFICATION_WS_SCHEMA_VERSION
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.user_notification import UserNotification
-from app.schemas.notification import NotificationCreate
 from app.repositories.notification_repository import (
     notification_repository,
     user_notification_repository,
 )
 from app.realtime.connection_manager import connection_manager
+from app.schemas.notification import NotificationType
+
+ORDER_STATUS_TO_NOTIF_TYPE: dict[str, NotificationType] = {
+    "PENDING": NotificationType.ORDER_STATUS_PENDING,
+    "CONFIRMED": NotificationType.ORDER_STATUS_CONFIRMED,
+    "INPROGRESS": NotificationType.ORDER_STATUS_INPROGRESS,
+    "SHIPPED": NotificationType.ORDER_STATUS_SHIPPED,
+    "DELIVERED": NotificationType.ORDER_STATUS_DELIVERED,
+    "COMPLETED": NotificationType.ORDER_STATUS_COMPLETED,
+    "CANCELLED": NotificationType.ORDER_STATUS_CANCELLED,
+    "CANCEL_REQUESTED": NotificationType.ORDER_STATUS_CANCEL_REQUESTED,
+    "RETURNED": NotificationType.ORDER_STATUS_RETURNED,
+}
+
+
+def _safe_notification_type(value: Optional[str]) -> str:
+    raw = str(value or "").strip()
+    if raw in NotificationType._value2member_map_:
+        return raw
+    return NotificationType.GENERIC.value
 
 
 class NotificationService:
-    """Logic nghiệp vụ cho Notification."""
+    """Business logic for Notification."""
 
     def __init__(self):
         self.repository = notification_repository
         self.user_notif_repo = user_notification_repository
 
     @staticmethod
-    def _meta_from_message(message: Optional[str]) -> Dict[str, Any]:
-        """Parse các dòng key:value số (vd order_id:1) thành dict cho client."""
+    def _payload_from_message(message: Optional[str]) -> Dict[str, Any]:
+        """Parse JSON payload from message; fallback key:value lines."""
         out: Dict[str, Any] = {}
         if not message:
             return out
-        for line in message.split("\n"):
+
+        m = message.strip()
+        if not m:
+            return out
+
+        if (m.startswith("{") and m.endswith("}")) or (m.startswith("[") and m.endswith("]")):
+            try:
+                parsed = json.loads(m)
+                if isinstance(parsed, dict):
+                    return parsed
+                return {"value": parsed}
+            except Exception:
+                pass
+
+        for line in m.split("\n"):
             part = line.strip()
             if ":" not in part:
                 continue
@@ -45,20 +81,28 @@ class NotificationService:
                 out[k] = v
         return out
 
+    @staticmethod
+    def _message_from_payload(payload: Optional[Dict[str, Any]]) -> str:
+        if not payload:
+            return "{}"
+        return json.dumps(payload, ensure_ascii=False)
+
     async def _build_new_notif_payload(
         self, db: AsyncSession, notif: Notification, user_id: int
     ) -> dict:
         unread = await self.user_notif_repo.count_unread(db, user_id)
+        payload = self._payload_from_message(notif.message or "")
         return {
             "type": "new_notification",
             "schema_version": NOTIFICATION_WS_SCHEMA_VERSION,
             "id": notif.id,
             "title": notif.title or "",
             "message": notif.message or "",
-            "notif_type": notif.type or "INFO",
+            "notif_type": notif.type or NotificationType.GENERIC.value,
             "send_date": notif.send_date.isoformat() if notif.send_date else None,
             "unread_count": unread,
-            "meta": self._meta_from_message(notif.message or ""),
+            "payload": payload,
+            "meta": payload,
         }
 
     async def push_unread_sync(self, db: AsyncSession, user_id: int) -> None:
@@ -72,13 +116,15 @@ class NotificationService:
         db: AsyncSession,
         user_ids: List[int],
         title: str,
-        message: str,
-        type: str = "INFO",
+        message: str = "",
+        type: str = NotificationType.GENERIC.value,
+        payload: Optional[Dict[str, Any]] = None,
     ) -> Notification:
-        """Tạo thông báo và gửi cho nhiều user; sau flush đẩy realtime."""
+        """Create notification and send realtime to many users."""
+        final_message = self._message_from_payload(payload) if payload is not None else (message or "{}")
         notif = Notification(
             title=title,
-            message=message,
+            message=final_message,
             type=type,
             send_date=datetime.utcnow(),
         )
@@ -90,8 +136,8 @@ class NotificationService:
         await db.flush()
         await db.refresh(notif)
         for uid in user_ids:
-            payload = await self._build_new_notif_payload(db, notif, uid)
-            await connection_manager.send_json_to_user(uid, payload)
+            ws_payload = await self._build_new_notif_payload(db, notif, uid)
+            await connection_manager.send_json_to_user(uid, ws_payload)
         return notif
 
     async def resolve_broadcast_recipient_ids(
@@ -103,7 +149,7 @@ class NotificationService:
     ) -> List[int]:
         if user_ids:
             return sorted({int(x) for x in user_ids})
-        stmt = select(User.id).where(User.deleted_at.is_(None))  # noqa: E712
+        stmt = select(User.id).where(User.deleted_at.is_(None))
         if is_active is not None:
             stmt = stmt.where(User.is_active == is_active)
         if is_superuser is not None:
@@ -117,7 +163,7 @@ class NotificationService:
         *,
         title: str,
         message: str,
-        type: str = "INFO",
+        type: str = NotificationType.GENERIC.value,
         user_ids: Optional[List[int]] = None,
         is_active: Optional[bool] = None,
         is_superuser: Optional[bool] = None,
@@ -126,19 +172,43 @@ class NotificationService:
             db, user_ids, is_active=is_active, is_superuser=is_superuser
         )
         if not ids:
-            raise ValueError("Không có người nhận")
-        return await self.create_and_send_to_users(db, ids, title, message, type)
+            raise ValueError("Khong co nguoi nhan")
+        return await self.create_and_send_to_users(db, ids, title, message, type, payload=None)
 
     async def get_all(
         self, db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> List[Notification]:
-        """Admin: lấy tất cả thông báo."""
         return await self.repository.get_multi_active(db, skip, limit)
 
     async def get_user_notifications(
         self, db: AsyncSession, user_id: int, skip: int = 0, limit: int = 100
     ) -> List[UserNotification]:
         return await self.user_notif_repo.get_by_user(db, user_id, skip, limit)
+
+    def map_user_notifications_for_api(self, rows: List[UserNotification]) -> List[dict]:
+        out: List[dict] = []
+        for un in rows:
+            notif = un.notification
+            payload = self._payload_from_message((notif.message if notif else "") or "")
+            notif_type = _safe_notification_type(notif.type if notif else None)
+            out.append(
+                {
+                    "notification_id": un.notification_id,
+                    "user_id": un.user_id,
+                    "is_read": un.is_read,
+                    "read_at": un.read_at,
+                    "notification": {
+                        "id": notif.id if notif else un.notification_id,
+                        "title": (notif.title if notif else "") or "",
+                        "message": (notif.message if notif else "") or "",
+                        "type": notif_type,
+                        "send_date": notif.send_date if notif else None,
+                        "deleted_at": notif.deleted_at if notif else None,
+                        "payload": payload,
+                    },
+                }
+            )
+        return out
 
     async def mark_read(
         self, db: AsyncSession, notification_id: int, user_id: int
@@ -159,8 +229,8 @@ class NotificationService:
     async def get_superuser_ids(self, db: AsyncSession) -> List[int]:
         result = await db.execute(
             select(User.id).where(
-                User.is_superuser.is_(True),  # noqa: E712
-                User.deleted_at.is_(None),  # noqa: E712
+                User.is_superuser.is_(True),
+                User.deleted_at.is_(None),
             )
         )
         return [int(r[0]) for r in result.all()]
@@ -172,38 +242,37 @@ class NotificationService:
         order_id: int,
         status_label: str,
     ) -> None:
-        msg = f"Trạng thái đơn hàng đã cập nhật.\norder_id:{order_id}"
+        raw = (status_label or "").upper()
+        notif_type = ORDER_STATUS_TO_NOTIF_TYPE.get(raw, NotificationType.GENERIC)
         await self.create_and_send_to_users(
             db,
             [buyer_user_id],
-            title=f"Đơn hàng #{order_id}",
-            message=msg,
-            type="ORDER_STATUS",
+            title=f"ORDER #{order_id}",
+            type=notif_type.value,
+            payload={"order_id": order_id, "status": raw},
         )
 
     async def notify_checkout_placed_for_buyer(
         self, db: AsyncSession, buyer_user_id: int, order_id: int
     ) -> None:
-        msg = f"Đơn của bạn đã được ghi nhận.\norder_id:{order_id}"
         await self.create_and_send_to_users(
             db,
             [buyer_user_id],
-            title=f"Đơn hàng #{order_id}",
-            message=msg,
-            type="ORDER_STATUS",
+            title=f"ORDER #{order_id}",
+            type=NotificationType.ORDER_NEW.value,
+            payload={"order_id": order_id},
         )
 
     async def notify_admins_new_order(self, db: AsyncSession, order_id: int) -> None:
         admin_ids = await self.get_superuser_ids(db)
         if not admin_ids:
             return
-        msg = f"Có đơn hàng mới cần xử lý.\norder_id:{order_id}"
         await self.create_and_send_to_users(
             db,
             admin_ids,
-            title=f"Đơn mới #{order_id}",
-            message=msg,
-            type="ORDER_NEW",
+            title=f"ORDER #{order_id}",
+            type=NotificationType.ORDER_NEW.value,
+            payload={"order_id": order_id},
         )
 
     async def notify_admins_new_review(
@@ -212,13 +281,12 @@ class NotificationService:
         admin_ids = await self.get_superuser_ids(db)
         if not admin_ids:
             return
-        msg = f"Có đánh giá mới.\nbook_id:{book_id}\nreview_id:{review_id}"
         await self.create_and_send_to_users(
             db,
             admin_ids,
-            title="Đánh giá mới",
-            message=msg,
-            type="REVIEW_NEW",
+            title="REVIEW_NEW",
+            type=NotificationType.REVIEW_NEW.value,
+            payload={"book_id": book_id, "review_id": review_id},
         )
 
     async def notify_admins_new_support(
@@ -227,13 +295,12 @@ class NotificationService:
         admin_ids = await self.get_superuser_ids(db)
         if not admin_ids:
             return
-        msg = f"Có yêu cầu hỗ trợ mới.\nsupport_id:{support_id}"
         await self.create_and_send_to_users(
             db,
             admin_ids,
-            title="Hỗ trợ",
-            message=msg,
-            type="SUPPORT_NEW",
+            title="SUPPORT_NEW",
+            type=NotificationType.SUPPORT_NEW.value,
+            payload={"support_id": support_id},
         )
 
 

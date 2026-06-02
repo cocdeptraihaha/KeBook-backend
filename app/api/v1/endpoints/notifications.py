@@ -9,6 +9,7 @@ from app.schemas.notification import (
     Notification,
     NotificationBroadcastRequest,
     NotificationSendRequest,
+    UserNotificationOut,
 )
 from app.services.notification_service import notification_service
 
@@ -35,7 +36,7 @@ async def mark_all_my_notifications_read(
     return {"updated": n}
 
 
-@router.get("/me")
+@router.get("/me", response_model=list[UserNotificationOut])
 async def get_my_notifications(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
@@ -43,9 +44,10 @@ async def get_my_notifications(
     current_user: User = Depends(get_current_active_user),
 ):
     """Get notifications of logged-in user."""
-    return await notification_service.get_user_notifications(
+    rows = await notification_service.get_user_notifications(
         db, current_user.id, skip, limit
     )
+    return notification_service.map_user_notifications_for_api(rows)
 
 
 @router.post("/{notification_id}/read")
@@ -88,7 +90,7 @@ async def create_notification(
         body.user_ids,
         title=body.title or "",
         message=body.message or "",
-        type=body.type or "INFO",
+        type=body.type or "GENERIC",
     )
 
 
@@ -107,7 +109,7 @@ async def broadcast_notification(
             db,
             title=body.title or "",
             message=body.message or "",
-            type=body.type or "INFO",
+            type=body.type or "GENERIC",
             user_ids=body.user_ids,
             is_active=is_active,
             is_superuser=is_superuser,
