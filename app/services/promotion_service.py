@@ -44,6 +44,9 @@ class PromotionService:
             if used >= int(usage_limit):
                 return None, 0, "Mã khuyến mãi đã hết lượt sử dụng"
         discount = 0
+        fixed_amount = getattr(promo, "discount_amount", None)
+        if fixed_amount:
+            discount = min(float(order_total), float(fixed_amount))
         if promo.discount_percent:
             discount = order_total * (promo.discount_percent / 100)
         if promo.max_discount and discount > promo.max_discount:
@@ -86,7 +89,12 @@ class PromotionService:
             code=code,
             name=name,
             discount_percent=tpl.discount_percent,
+            discount_amount=getattr(tpl, "discount_amount", None),
+            free_shipping=bool(getattr(tpl, "free_shipping", False)),
             max_discount=tpl.max_discount,
+            min_order_amount=getattr(tpl, "min_order_amount", None),
+            usage_limit=1,
+            used_count=0,
             start_date=now,
             end_date=end,
             deleted_at=None,

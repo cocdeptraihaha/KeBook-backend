@@ -14,6 +14,7 @@ from app.models.service import Service
 from app.models.cart import Cart
 from app.models.book import Book
 from app.models.user import User
+from app.models.user_address import UserAddress
 from app.models.user_promotion import UserPromotion
 from app.schemas.book import BookDiscountOut, _pick_active_discount
 from app.schemas.order import OrderCreate, CheckoutRequest
@@ -321,6 +322,7 @@ class OrderService:
 
         discount_amount = 0.0
         promotion_id = None
+        applied_promo = None
         if checkout_in.promotion_code:
             promo, discount_amount, err = await promotion_service.validate_code(
                 db, checkout_in.promotion_code, subtotal, user_id=user_id
@@ -340,6 +342,7 @@ class OrderService:
                 if already_used.scalars().first():
                     raise ValueError("Bạn đã sử dụng mã giảm giá này rồi")
                 promotion_id = promo.id
+                applied_promo = promo
 
         after_promo = max(0.0, subtotal - discount_amount)
         settings = get_settings()
@@ -358,12 +361,30 @@ class OrderService:
                 points_discount_amount = float(after_promo)
                 actual_pts = int(after_promo / point_val) if point_val > 0 else 0
 
-        if checkout_in.full_name and checkout_in.full_name.strip():
-            user_full_name = checkout_in.full_name.strip()
-        else:
-            user_result = await db.execute(select(User).where(User.id == user_id))
-            user = user_result.scalars().first()
-            user_full_name = (user.full_name if user else None) or None
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalars().first()
+        saved_address = None
+        if checkout_in.address_id:
+            address_result = await db.execute(
+                select(UserAddress).where(
+                    UserAddress.id == checkout_in.address_id,
+                    UserAddress.user_id == user_id,
+                    UserAddress.deleted_at.is_(None),
+                )
+            )
+            saved_address = address_result.scalars().first()
+            if not saved_address:
+                raise ValueError("Address not found")
+
+        user_full_name = (
+            checkout_in.full_name.strip()
+            if checkout_in.full_name and checkout_in.full_name.strip()
+            else (
+                saved_address.recipient_name
+                if saved_address and saved_address.recipient_name
+                else ((user.full_name if user else None) or None)
+            )
+        )
 
         result = await db.execute(select(Service).where(Service.deleted_at.is_(None)).limit(1))
         service = result.scalars().first()
@@ -372,6 +393,8 @@ class OrderService:
             db.add(service)
             await db.flush()
         shipping_fee = float(service.price or 0)
+        if applied_promo and bool(getattr(applied_promo, "free_shipping", False)):
+            shipping_fee = 0.0
 
         total = max(0.0, after_promo - points_discount_amount + shipping_fee)
 
@@ -379,20 +402,45 @@ class OrderService:
         db.add(payment)
         await db.flush()
 
-        address_parts = [
-            (checkout_in.shipping_address or "").strip(),
-            (checkout_in.ward or "").strip(),
-            (checkout_in.province or "").strip(),
-        ]
+        phone_number = (
+            checkout_in.phone_number.strip()
+            if checkout_in.phone_number and checkout_in.phone_number.strip()
+            else (
+                saved_address.phone_number
+                if saved_address and saved_address.phone_number
+                else None
+            )
+        )
+        address_detail = (
+            checkout_in.shipping_address.strip()
+            if checkout_in.shipping_address and checkout_in.shipping_address.strip()
+            else (
+                saved_address.address_detail
+                if saved_address and saved_address.address_detail
+                else ""
+            )
+        )
+        ward = (
+            checkout_in.ward.strip()
+            if checkout_in.ward and checkout_in.ward.strip()
+            else (saved_address.ward if saved_address and saved_address.ward else "")
+        )
+        province = (
+            checkout_in.province.strip()
+            if checkout_in.province and checkout_in.province.strip()
+            else (saved_address.province if saved_address and saved_address.province else "")
+        )
+        address_parts = [address_detail, ward, province]
         full_address = ", ".join([p for p in address_parts if p]) or None
 
         order = Order(
             user_id=user_id,
+            address_id=saved_address.id if saved_address else None,
             full_name=user_full_name,
             payment_id=payment.id,
             service_id=service.id,
             note=checkout_in.note,
-            phone_number=checkout_in.phone_number,
+            phone_number=phone_number,
             shipping_address=full_address,
             status="PENDING",
             total_price=total,
@@ -518,14 +566,18 @@ class OrderService:
         await db.flush()
         await db.refresh(order)
         from app.services.notification_service import notification_service
+        from app.schemas.notification import NotificationType
 
-        meta = f"tracking:{order.tracking_number or ''}|provider:{order.shipping_provider or ''}"
         await notification_service.create_and_send_to_users(
             db,
             [order.user_id],
-            title=f"Đơn hàng #{order_id}",
-            message=f"Đơn của bạn đã có thông tin vận chuyển.\n{meta}",
-            type="ORDER_SHIPMENT",
+            title=f"ORDER #{order_id}",
+            type=NotificationType.ORDER_SHIPMENT.value,
+            payload={
+                "order_id": order_id,
+                "tracking_number": order.tracking_number,
+                "shipping_provider": order.shipping_provider,
+            },
         )
         return order
 

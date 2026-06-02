@@ -35,11 +35,13 @@ class Order(Base):
     payment_id = Column(Integer, ForeignKey("payment.id"), nullable=False)
     service_id = Column(Integer, ForeignKey("service.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    address_id = Column(Integer, ForeignKey("user_addresses.id"), nullable=True)
     deleted_at = Column(DateTime, nullable=True)
 
     payment = relationship("Payment", back_populates="orders")
     service = relationship("Service", back_populates="orders")
     user = relationship("User", back_populates="orders")
+    address = relationship("UserAddress", back_populates="orders")
     order_items = relationship("OrderItem", back_populates="order")
     order_promotions = relationship("OrderPromotion", back_populates="order")
     status_history = relationship("OrderStatusHistory", back_populates="order")

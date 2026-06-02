@@ -18,6 +18,13 @@ from app.services.reward_service import reward_service
 router = APIRouter()
 
 
+def _normalize_reward_type(value: str | None) -> str:
+    reward_type = (value or "DISCOUNT_PERCENT").strip().upper()
+    if reward_type not in {"DISCOUNT_PERCENT", "DISCOUNT_AMOUNT", "FREE_SHIPPING"}:
+        raise HTTPException(status_code=400, detail="Invalid reward_type")
+    return reward_type
+
+
 @router.get("/admin/rewards", response_model=list[PointRewardOut])
 async def admin_list_point_rewards(
     skip: int = Query(0, ge=0),
@@ -34,11 +41,18 @@ async def admin_create_point_reward(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
+    reward_type = _normalize_reward_type(body.reward_type)
     row = PointReward(
         name=body.name,
+        description=body.description,
+        reward_type=reward_type,
+        icon=body.icon,
         cost_points=body.cost_points,
-        discount_percent=float(body.discount_percent),
+        discount_percent=float(body.discount_percent or 0) if reward_type == "DISCOUNT_PERCENT" else None,
+        discount_amount=float(body.discount_amount or 0) if reward_type == "DISCOUNT_AMOUNT" else None,
         max_discount=body.max_discount,
+        min_order_amount=body.min_order_amount,
+        usage_limit=body.usage_limit,
         valid_days=max(1, int(body.valid_days or 30)),
         active=bool(body.active),
     )
@@ -53,6 +67,8 @@ async def admin_update_point_reward(
     _: User = Depends(get_current_superuser),
 ):
     patch = body.model_dump(exclude_unset=True)
+    if "reward_type" in patch:
+        patch["reward_type"] = _normalize_reward_type(patch["reward_type"])
     row = await point_reward_repository.update_fields(db, reward_id, patch)
     if not row:
         raise HTTPException(status_code=404, detail="Point reward not found")
@@ -80,7 +96,10 @@ async def redeem_point_reward(
         code=promo.code or "",
         name=promo.name,
         discount_percent=promo.discount_percent,
+        discount_amount=getattr(promo, "discount_amount", None),
+        free_shipping=bool(getattr(promo, "free_shipping", False)),
         max_discount=promo.max_discount,
+        min_order_amount=getattr(promo, "min_order_amount", None),
         end_date=promo.end_date,
         points_balance_after=bal,
     )

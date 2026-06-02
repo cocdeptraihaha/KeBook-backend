@@ -45,6 +45,7 @@ class CheckoutItemIn(BaseModel):
 
 class CheckoutRequest(BaseModel):
     """Checkout từ giỏ hàng hoặc danh sách items cụ thể."""
+    address_id: Optional[int] = None
     full_name: Optional[str] = None
     note: Optional[str] = None
     phone_number: Optional[str] = None
@@ -105,6 +106,7 @@ class Order(OrderBase):
     status: Optional[str] = None
     total_price: Optional[float] = None
     user_id: int = 0
+    address_id: Optional[int] = None
     deleted_at: Optional[datetime] = None
     tracking_number: Optional[str] = None
     shipping_provider: Optional[str] = None

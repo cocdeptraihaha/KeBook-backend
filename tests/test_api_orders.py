@@ -87,6 +87,101 @@ def test_checkout_loyalty_points_discount(client: TestClient, auth_headers, admi
     assert int(r_me2.json().get("loyalty_points", 0)) == points_before + 500 - 200
 
 
+def test_checkout_with_saved_address_id(client: TestClient, auth_headers, admin_headers):
+    """Checkout with address_id snapshots receiver and full address."""
+    r_address = client.post(
+        "/api/v1/addresses/me",
+        headers=auth_headers,
+        json={
+            "label": "Nha rieng",
+            "recipient_name": "Nguyen Van A",
+            "phone_number": "0907777777",
+            "address_detail": "99 Tran Hung Dao",
+            "ward": "Cau Ong Lanh",
+            "province": "Ho Chi Minh",
+        },
+    )
+    assert r_address.status_code == 201, r_address.text
+    address_id = r_address.json()["id"]
+
+    r_book = client.post(
+        "/api/v1/books/",
+        headers=admin_headers,
+        json={
+            "title": "Sach checkout address id",
+            "author": "T",
+            "selling_price": 100000,
+            "stock_quantity": 50,
+        },
+    )
+    assert r_book.status_code == 201, r_book.text
+    book_id = r_book.json()["id"]
+
+    r_cart = client.post(
+        "/api/v1/cart/",
+        headers=auth_headers,
+        json={"book_id": book_id, "quantity": 1},
+    )
+    assert r_cart.status_code in (200, 201), r_cart.text
+
+    r_checkout = client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={"address_id": address_id},
+    )
+    assert r_checkout.status_code == 201, r_checkout.text
+    order = r_checkout.json()["order"]
+    assert order["address_id"] == address_id
+    assert order["full_name"] == "Nguyen Van A"
+    assert order["phone_number"] == "0907777777"
+    assert order["shipping_address"] == "99 Tran Hung Dao, Cau Ong Lanh, Ho Chi Minh"
+
+
+def test_checkout_rejects_other_user_address_id(
+    client: TestClient, auth_headers, user_headers, admin_headers
+):
+    r_address = client.post(
+        "/api/v1/addresses/me",
+        headers=user_headers,
+        json={
+            "label": "Dia chi user khac",
+            "recipient_name": "Other User",
+            "phone_number": "0908888888",
+            "address_detail": "Other House",
+            "ward": "Other Ward",
+            "province": "Other Province",
+        },
+    )
+    assert r_address.status_code == 201, r_address.text
+    address_id = r_address.json()["id"]
+
+    r_book = client.post(
+        "/api/v1/books/",
+        headers=admin_headers,
+        json={
+            "title": "Sach reject other address",
+            "author": "T",
+            "selling_price": 100000,
+            "stock_quantity": 50,
+        },
+    )
+    assert r_book.status_code == 201, r_book.text
+    book_id = r_book.json()["id"]
+    client.post(
+        "/api/v1/cart/",
+        headers=auth_headers,
+        json={"book_id": book_id, "quantity": 1},
+    )
+
+    r_checkout = client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={"address_id": address_id},
+    )
+    assert r_checkout.status_code == 400
+    assert "Address not found" in r_checkout.text
+
+
 def test_admin_status_only_allows_next_progress_or_cancel(
     client: TestClient, auth_headers, admin_headers
 ):
