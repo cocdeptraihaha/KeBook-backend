@@ -10,6 +10,7 @@ Backend FastAPI async với **JWT auth**, **đăng ký/kích hoạt bằng OTP q
 
 - **Auth**: đăng ký → gửi OTP → verify OTP kích hoạt → login lấy JWT  
 - **Forgot password**: gửi OTP → reset password  
+- **Book multi-images**: 1 sách có nhiều ảnh (`book_images`), vẫn tương thích `book_detail.image_url`
 - **Async SQLAlchemy**: hỗ trợ MySQL (driver `aiomysql`) và có default SQLite nếu không set `.env`  
 - **Background cleanup**: định kỳ dọn OTP hết hạn và user chưa kích hoạt có OTP đã hết hạn  
 
@@ -87,6 +88,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - Swagger UI: `http://localhost:8000/docs`  
 - ReDoc: `http://localhost:8000/redoc`  
 - **API Docs (Markdown)**: `docs/API_DOCS.md` – tài liệu chi tiết các route  
+- **Frontend update (multi-image)**: `docs/FRONTEND_UPDATE_BOOK_IMAGES.md`
 
 ### Chạy không reload (production-style)
 
@@ -171,6 +173,7 @@ Ví dụ:
 - **Auth**: `/api/v1/auth/*` (register, verify-otp, login, forgot/reset password)
 - **Users**: `/api/v1/users/*` (me, admin user management, points adjust)
 - **Books / Categories / Cart**: `/api/v1/books/*`, `/api/v1/categories/*`, `/api/v1/cart/*`
+  - Includes book image endpoints: `GET/POST/PATCH/DELETE /api/v1/books/{book_id}/images...`
 - **Orders**: `/api/v1/orders/*` (checkout, my orders, admin orders, status)
 - **Promotions**: `/api/v1/promotions/*` (create/list/update, issue user, stats)
 - **Points / Rewards**: `/api/v1/points/*` (admin reward CRUD, user redeem)
@@ -320,6 +323,6 @@ pytest -v
 
 - Đổi `SECRET_KEY` và không commit `.env` lên git.  
 - Database: nếu dùng MySQL (`aiomysql`) hãy đảm bảo MySQL đã chạy và tạo database trước (ví dụ `CREATE DATABASE kebook;`).  
-- CORS đang cho phép mọi origin (`*`); production nên giới hạn domain.
+- CORS dùng whitelist từ `CORS_ORIGINS`; hãy cấu hình đúng domain frontend (ví dụ `3000`, `5173`) theo môi trường.
 
 Nếu cần thêm endpoint hoặc đổi cấu trúc, có thể mở rộng theo pattern hiện tại (endpoint → schema → service → repository).

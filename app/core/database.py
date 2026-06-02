@@ -1,5 +1,7 @@
 """Database connection and session management."""
+import asyncio
 import ssl
+import sys
 from urllib.parse import parse_qs, urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -8,6 +10,10 @@ from sqlalchemy.orm import DeclarativeBase
 from app.core.config import get_settings
 
 settings = get_settings()
+
+if sys.platform == "win32":
+    # Avoid aiomysql TLS issues on Proactor loop (WinError 87).
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def _get_engine_url_and_connect_args():

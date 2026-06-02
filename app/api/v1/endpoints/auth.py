@@ -90,16 +90,16 @@ async def register(
 @router.post("/verify-otp", response_model=TokenResponse)
 @limiter.limit("10/minute")
 async def verify_otp(
-    request_http: Request,
-    request: VerifyOTPRequest,
+    request: Request,
+    payload: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Verify OTP to activate account."""
     try:
         is_valid, otp = await otp_service.verify_otp(
             db,
-            request.email,
-            request.otp_code,
+            payload.email,
+            payload.otp_code,
             OTPType.ACTIVATION,
         )
 
@@ -108,7 +108,7 @@ async def verify_otp(
                 raise HTTPException(status_code=400, detail="OTP code has expired")
             raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-        user = await user_service.repository.get_by_email(db, request.email)
+        user = await user_service.repository.get_by_email(db, payload.email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -136,12 +136,12 @@ async def verify_otp(
 @router.post("/resend-otp")
 @limiter.limit("5/minute")
 async def resend_otp(
-    request_http: Request,
-    request: ResendOTPRequest,
+    request: Request,
+    payload: ResendOTPRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Resend activation OTP. Chỉ gửi nếu email tồn tại và chưa kích hoạt; email lạ vẫn 200 (bảo mật)."""
-    user = await user_service.repository.get_by_email(db, request.email)
+    user = await user_service.repository.get_by_email(db, payload.email)
     if not user or user.deleted_at is not None:
         return {
             "message": "If this email is registered and not activated, an OTP has been sent."
@@ -151,7 +151,7 @@ async def resend_otp(
 
     await otp_service.create_and_send_otp(
         db,
-        request.email,
+        payload.email,
         OTPType.ACTIVATION,
     )
     await db.commit()
@@ -164,18 +164,18 @@ async def resend_otp(
 @router.post("/forgot-password")
 @limiter.limit("5/minute")
 async def forgot_password(
-    request_http: Request,
-    request: ForgotPasswordRequest,
+    request: Request,
+    payload: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Send OTP to reset password. Only sends if email exists in DB."""
-    user = await user_service.repository.get_by_email(db, request.email)
+    user = await user_service.repository.get_by_email(db, payload.email)
     if not user:
         raise HTTPException(status_code=404, detail="Email not found")
 
     await otp_service.create_and_send_otp(
         db,
-        request.email,
+        payload.email,
         OTPType.RESET_PASSWORD,
     )
     await db.commit()
@@ -188,16 +188,16 @@ async def forgot_password(
 @router.post("/reset-password")
 @limiter.limit("10/minute")
 async def reset_password(
-    request_http: Request,
-    request: ResetPasswordRequest,
+    request: Request,
+    payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """Reset password with OTP."""
     # Verify OTP
     is_valid, otp = await otp_service.verify_otp(
         db,
-        request.email,
-        request.otp_code,
+        payload.email,
+        payload.otp_code,
         OTPType.RESET_PASSWORD,
     )
 
@@ -206,11 +206,11 @@ async def reset_password(
             raise HTTPException(status_code=400, detail="OTP code has expired")
         raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-    user = await user_service.repository.get_by_email(db, request.email)
+    user = await user_service.repository.get_by_email(db, payload.email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await user_service.reset_password(db, user.id, request.new_password)
+    await user_service.reset_password(db, user.id, payload.new_password)
 
     return {"message": "Password changed successfully. Please log in again."}
 

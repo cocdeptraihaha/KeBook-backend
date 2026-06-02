@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 90
     API_V1_STR: str = "/api/v1"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     
     # Email settings (cho gửi OTP)
     # Gmail: smtp.gmail.com, port 587, dùng App Password
