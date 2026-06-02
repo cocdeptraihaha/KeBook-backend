@@ -35,3 +35,9 @@ class Book(Base):
     reviews = relationship("Review", back_populates="book")
     favorites = relationship("Favorite", back_populates="book")
     book_views = relationship("BookView", back_populates="book")
+    images = relationship(
+        "BookImage",
+        back_populates="book",
+        cascade="all, delete-orphan",
+        order_by="BookImage.sort_order, BookImage.id",
+    )

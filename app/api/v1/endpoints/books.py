@@ -7,15 +7,19 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
 from app.models.user import User
+from app.models.book_image import BookImage
 from app.schemas.book import (
     Book as BookSchema,
     BookCategoriesPut,
     BookCreate,
     BookCreateWithDetail,
+    BookImage as BookImageSchema,
+    BookImageCreate,
+    BookImageUpdate,
     BookUpdate,
     BookWithDetailOut,
 )
-from app.repositories.book_repository import book_repository
+from app.repositories.book_repository import book_repository, book_image_repository
 from app.repositories.book_view_repository import book_view_repository
 from app.services.book_service import book_service
 
@@ -55,6 +59,7 @@ async def admin_low_stock_books(
     for b in rows:
         _ = list(b.discounts or [])
         _ = b.book_detail
+        _ = list(b.images or [])
     return rows
 
 
@@ -133,6 +138,7 @@ async def get_book(
     # Materialize quan hệ trong phiên async (tránh lazy-load khi serialize response)
     _ = list(book.discounts or [])
     _ = book.book_detail
+    _ = list(book.images or [])
     bc, rc, vc = await book_repository.get_book_stats(db, book_id)
     out = BookWithDetailOut.model_validate(book, from_attributes=True)
     return out.model_copy(
@@ -155,8 +161,10 @@ async def create_book(
     if full:
         _ = list(full.discounts or [])
         _ = full.book_detail
+        _ = list(full.images or [])
         return full
     _ = list(book.discounts or [])
+    _ = list(book.images or [])
     return book
 
 
@@ -176,8 +184,10 @@ async def update_book(
     if full:
         _ = list(full.discounts or [])
         _ = full.book_detail
+        _ = list(full.images or [])
         return full
     _ = list(book.discounts or [])
+    _ = list(book.images or [])
     return book
 
 
@@ -206,8 +216,10 @@ async def restore_book(
     if full:
         _ = list(full.discounts or [])
         _ = full.book_detail
+        _ = list(full.images or [])
         return full
     _ = list(book.discounts or [])
+    _ = list(book.images or [])
     return book
 
 
@@ -224,4 +236,86 @@ async def put_book_categories(
         raise HTTPException(status_code=400, detail=str(e))
     _ = list(full.discounts or [])
     _ = full.book_detail
+    _ = list(full.images or [])
     return full
+
+
+@router.get("/{book_id}/images", response_model=list[BookImageSchema])
+async def list_book_images(
+    book_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    book = await book_repository.get(db, book_id)
+    if not book or book.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return await book_image_repository.list_by_book(db, book_id)
+
+
+@router.post("/{book_id}/images", response_model=BookImageSchema, status_code=status.HTTP_201_CREATED)
+async def create_book_image(
+    book_id: int,
+    payload: BookImageCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    book = await book_repository.get(db, book_id)
+    if not book or book.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    if payload.is_primary:
+        await book_image_repository.clear_primary_for_book(db, book_id)
+
+    created = BookImage(
+        book_id=book_id,
+        image_url=payload.image_url,
+        sort_order=payload.sort_order,
+        is_primary=payload.is_primary,
+        alt_text=payload.alt_text,
+    )
+    db.add(created)
+    await db.flush()
+
+    await book_image_repository.ensure_single_primary(db, book_id)
+    await book_image_repository.sync_legacy_image_url(db, book_id)
+    await db.refresh(created)
+    return created
+
+
+@router.patch("/{book_id}/images/{image_id}", response_model=BookImageSchema)
+async def update_book_image(
+    book_id: int,
+    image_id: int,
+    payload: BookImageUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    image = await book_image_repository.get(db, image_id)
+    if not image or image.book_id != book_id:
+        raise HTTPException(status_code=404, detail="Book image not found")
+
+    if payload.is_primary is True:
+        await book_image_repository.clear_primary_for_book(db, book_id)
+
+    updated = await book_image_repository.update(db, image, payload)
+    await book_image_repository.ensure_single_primary(db, book_id)
+    await book_image_repository.sync_legacy_image_url(db, book_id)
+    await db.refresh(updated)
+    return updated
+
+
+@router.delete("/{book_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_book_image(
+    book_id: int,
+    image_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    image = await book_image_repository.get(db, image_id)
+    if not image or image.book_id != book_id:
+        raise HTTPException(status_code=404, detail="Book image not found")
+
+    await db.delete(image)
+    await db.flush()
+    await book_image_repository.ensure_single_primary(db, book_id)
+    await book_image_repository.sync_legacy_image_url(db, book_id)
+    return None

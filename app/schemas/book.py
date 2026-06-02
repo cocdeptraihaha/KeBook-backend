@@ -16,6 +16,31 @@ class BookDiscountOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookImageBase(BaseModel):
+    image_url: str
+    sort_order: int = 0
+    is_primary: bool = False
+    alt_text: Optional[str] = None
+
+
+class BookImageCreate(BookImageBase):
+    pass
+
+
+class BookImageUpdate(BaseModel):
+    image_url: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_primary: Optional[bool] = None
+    alt_text: Optional[str] = None
+
+
+class BookImage(BookImageBase):
+    id: int
+    book_id: int
+
+    model_config = {"from_attributes": True}
+
+
 def _pick_active_discount(
     discounts: List[BookDiscountOut] | None, original_price: float | None
 ) -> Tuple[Optional[BookDiscountOut], float]:
@@ -118,6 +143,7 @@ class Book(BookBase):
     # Loaded via ORM relationships; excluded from API output but used for computed fields
     book_detail: Optional[BookDetail] = Field(default=None, exclude=True)
     discounts: List[BookDiscountOut] = Field(default_factory=list, exclude=True)
+    images: List[BookImage] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -155,6 +181,11 @@ class Book(BookBase):
     @computed_field  # type: ignore[misc]
     @property
     def image_url(self) -> Optional[str]:
+        primary = next((img for img in self.images if img.is_primary), None)
+        if primary and primary.image_url:
+            return primary.image_url
+        if self.images:
+            return self.images[0].image_url
         detail = self.book_detail
         return detail.image_url if detail and getattr(detail, "image_url", None) is not None else None
 

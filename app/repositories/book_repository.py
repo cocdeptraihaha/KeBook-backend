@@ -1,32 +1,45 @@
 """Book repository."""
-from typing import Optional, List
-from sqlalchemy import select, func, exists
-from sqlalchemy.orm import selectinload
+from typing import List, Optional
+
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.book import Book
-from app.models.book_detail import BookDetail
-from app.models.book_category import BookCategory
-from app.models.book_discount import BookDiscount
 from app.models.book_book_discount import BookBookDiscount
+from app.models.book_category import BookCategory
+from app.models.book_detail import BookDetail
+from app.models.book_discount import BookDiscount
+from app.models.book_image import BookImage
 from app.models.book_view import BookView
-from app.models.order_item import OrderItem
-from app.models.order import Order, OrderStatus
-from app.models.review import Review
 from app.models.category import Category
-from app.schemas.book import BookCreate, BookUpdate, BookDetailCreate, BookDetailUpdate
+from app.models.order import Order, OrderStatus
+from app.models.order_item import OrderItem
+from app.models.review import Review
 from app.repositories.base_repository import BaseRepository
+from app.schemas.book import (
+    BookCreate,
+    BookDetailCreate,
+    BookDetailUpdate,
+    BookImageCreate,
+    BookImageUpdate,
+    BookUpdate,
+)
 
 
 class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
     """Repository cho Book."""
 
     async def get_with_detail(self, db: AsyncSession, id: int) -> Optional[Book]:
-        """Lấy book kèm book_detail."""
+        """Lay book kem book_detail."""
         result = await db.execute(
             select(Book)
             .where(Book.id == id)
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
         )
         return result.scalars().first()
 
@@ -36,7 +49,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         skip: int = 0,
         limit: int = 100,
     ) -> List[Book]:
-        """Lấy danh sách book chưa xóa."""
+        """Lay danh sach book chua xoa."""
         result = await db.execute(
             select(Book)
             .where(Book.deleted_at.is_(None))
@@ -52,7 +65,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         skip: int = 0,
         limit: int = 100,
     ) -> List[Book]:
-        """Tìm sách theo title, author."""
+        """Tim sach theo title, author."""
         stmt = select(Book).where(Book.deleted_at.is_(None))
         if q:
             stmt = stmt.where(
@@ -73,7 +86,11 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         stmt = (
             select(Book)
             .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
-            .options(selectinload(Book.discounts), selectinload(Book.book_detail))
+            .options(
+                selectinload(Book.discounts),
+                selectinload(Book.book_detail),
+                selectinload(Book.images),
+            )
         )
 
         if category_id is not None:
@@ -124,7 +141,11 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         stmt = (
             select(Book)
             .join(qty_subq, Book.id == qty_subq.c.book_id)
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
             .where(Book.deleted_at.is_(None))
             .order_by(qty_subq.c.total_qty.desc())
             .limit(limit)
@@ -162,7 +183,11 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         stmt = (
             select(Book)
             .join(disc_subq, Book.id == disc_subq.c.book_id)
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
             .where(Book.deleted_at.is_(None))
             .order_by(disc_subq.c.best_discount.desc())
             .limit(limit)
@@ -202,7 +227,7 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
     async def _similar_book_ids_fallback(
         self, db: AsyncSession, book_id: int, pool_limit: int
     ) -> List[int]:
-        """Sách khác đang active (khi không có thể loại / không có cùng category)."""
+        """Sach khac dang active (khi khong co category trung)."""
         r_ob = await db.execute(
             select(Book.id)
             .where(Book.id != book_id, Book.deleted_at.is_(None))
@@ -232,7 +257,9 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
             )
             ids = [row[0] for row in r_ids.all()]
         if not ids:
-            ids = await self._similar_book_ids_fallback(db, book_id, pool_limit=max(30, limit * 3))
+            ids = await self._similar_book_ids_fallback(
+                db, book_id, pool_limit=max(30, limit * 3)
+            )
         if not ids:
             return []
         r_cnt = await db.execute(
@@ -246,7 +273,11 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         r_books = await db.execute(
             select(Book)
             .where(Book.id.in_(ids))
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
         )
         by_id = {b.id: b for b in r_books.scalars().all()}
         return [by_id[i] for i in ids if i in by_id]
@@ -261,13 +292,17 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         sort: str = "id",
         order: str = "desc",
     ):
-        """Select sách cho admin (lọc xóa mềm, sort)."""
+        """Select sach cho admin."""
         from sqlalchemy import or_
 
         stmt = (
             select(Book)
             .join(BookDetail, Book.book_detail_id == BookDetail.id, isouter=True)
-            .options(selectinload(Book.discounts), selectinload(Book.book_detail))
+            .options(
+                selectinload(Book.discounts),
+                selectinload(Book.book_detail),
+                selectinload(Book.images),
+            )
         )
         if category_id is not None:
             stmt = stmt.where(
@@ -330,12 +365,60 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
                 Book.stock_quantity.is_not(None),
                 Book.stock_quantity <= threshold,
             )
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
             .order_by(Book.stock_quantity.asc(), Book.id)
             .limit(limit)
         )
         r = await db.execute(stmt)
         return list(r.scalars().all())
+
+
+class BookImageRepository(BaseRepository[BookImage, BookImageCreate, BookImageUpdate]):
+    """Repository cho BookImage."""
+
+    async def list_by_book(self, db: AsyncSession, book_id: int) -> List[BookImage]:
+        r = await db.execute(
+            select(BookImage)
+            .where(BookImage.book_id == book_id)
+            .order_by(BookImage.sort_order.asc(), BookImage.id.asc())
+        )
+        return list(r.scalars().all())
+
+    async def clear_primary_for_book(self, db: AsyncSession, book_id: int) -> None:
+        r = await db.execute(
+            select(BookImage).where(
+                BookImage.book_id == book_id, BookImage.is_primary == True  # noqa: E712
+            )
+        )
+        for img in r.scalars().all():
+            img.is_primary = False
+        await db.flush()
+
+    async def ensure_single_primary(self, db: AsyncSession, book_id: int) -> None:
+        images = await self.list_by_book(db, book_id)
+        if not images:
+            return
+        primaries = [x for x in images if x.is_primary]
+        if len(primaries) == 1:
+            return
+        for x in images:
+            x.is_primary = False
+        images[0].is_primary = True
+        await db.flush()
+
+    async def sync_legacy_image_url(self, db: AsyncSession, book_id: int) -> None:
+        book = await book_repository.get_with_detail(db, book_id)
+        if not book or not book.book_detail:
+            return
+        primary = next((img for img in (book.images or []) if img.is_primary), None)
+        if not primary and book.images:
+            primary = book.images[0]
+        book.book_detail.image_url = primary.image_url if primary else None
+        await db.flush()
 
 
 class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDetailUpdate]):
@@ -346,3 +429,4 @@ class BookDetailRepository(BaseRepository[BookDetail, BookDetailCreate, BookDeta
 
 book_repository = BookRepository(Book)
 book_detail_repository = BookDetailRepository(BookDetail)
+book_image_repository = BookImageRepository(BookImage)
