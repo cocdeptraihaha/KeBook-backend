@@ -40,6 +40,7 @@ class UserCreateInDB(BaseModel):
 class UserUpdate(BaseModel):
     """Schema khi cập nhật user."""
 
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
     username: Optional[str] = None
     full_name: Optional[str] = None

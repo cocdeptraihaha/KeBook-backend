@@ -274,7 +274,10 @@ async def read_my_owned_promotions(
                 "code": p.code,
                 "name": p.name,
                 "discount_percent": p.discount_percent,
+                "discount_amount": getattr(p, "discount_amount", None),
+                "free_shipping": bool(getattr(p, "free_shipping", False)),
                 "max_discount": p.max_discount,
+                "min_order_amount": getattr(p, "min_order_amount", None),
                 "start_date": p.start_date,
                 "end_date": p.end_date,
                 "used": used,
@@ -308,7 +311,10 @@ async def update_user(
     """Update user (own profile only)."""
     if current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied")
-    user = await user_service.update_user(db, user_id, user_in)
+    try:
+        user = await user_service.update_user(db, user_id, user_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not user or user.deleted_at is not None:
         raise HTTPException(status_code=404, detail="User not found")
     return user

@@ -1,5 +1,6 @@
 """SQLAlchemy models - kebookdb schema."""
 from app.models.user import User
+from app.models.user_address import UserAddress
 from app.models.otp import OTP, OTPType
 from app.models.book_detail import BookDetail
 from app.models.book import Book
@@ -24,11 +25,13 @@ from app.models.user_promotion import UserPromotion
 from app.models.point_transaction import PointTransaction
 from app.models.favorite import Favorite
 from app.models.book_view import BookView
+from app.models.book_image import BookImage
 from app.models.point_reward import PointReward
 from app.models.admin_audit_log import AdminAuditLog
 
 __all__ = [
     "User",
+    "UserAddress",
     "OTP",
     "OTPType",
     "BookDetail",
@@ -58,6 +61,7 @@ __all__ = [
     "PointTransaction",
     "Favorite",
     "BookView",
+    "BookImage",
     "PointReward",
     "AdminAuditLog",
 ]

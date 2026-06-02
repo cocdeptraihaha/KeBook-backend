@@ -67,6 +67,16 @@ class UserService:
             return None
 
         data = user_in.model_dump(exclude_unset=True)
+        if "email" in data and data["email"] and data["email"] != user.email:
+            existing_email = await self.repository.get_by_email(
+                db, data["email"], include_deleted=True
+            )
+            if existing_email and existing_email.id != user_id:
+                raise ValueError("Email already registered")
+        if "username" in data and data["username"] and data["username"] != user.username:
+            existing_username = await self.repository.get_by_username(db, data["username"])
+            if existing_username and existing_username.id != user_id:
+                raise ValueError("Username already in use")
         if "password" in data:
             data["hashed_password"] = get_password_hash(data.pop("password"))
             data.pop("password", None)

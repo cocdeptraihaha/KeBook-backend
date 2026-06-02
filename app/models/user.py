@@ -40,3 +40,4 @@ class User(Base):
     )
     favorites = relationship("Favorite", back_populates="user", foreign_keys="Favorite.user_id")
     book_views = relationship("BookView", back_populates="user", foreign_keys="BookView.user_id")
+    addresses = relationship("UserAddress", back_populates="user", foreign_keys="UserAddress.user_id")
