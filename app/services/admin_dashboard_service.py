@@ -185,7 +185,18 @@ class AdminDashboardService:
         if gb == "day":
             end = to_dt or datetime.utcnow()
             end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
-            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+            if from_dt is not None:
+                start_day = datetime(from_dt.year, from_dt.month, from_dt.day)
+            else:
+                start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+
+            # Limit window size to 366 days max to protect resources
+            diff_days = (end_day - start_day).days + 1
+            if diff_days <= 0:
+                diff_days = 1
+            elif diff_days > 366:
+                diff_days = 366
+                start_day = end_day - timedelta(days=365)
 
             stmt = (
                 select(func.date(User.created_at).label("period"), func.count(User.id))
@@ -208,7 +219,7 @@ class AdminDashboardService:
                     "period": (start_day + timedelta(days=i)).date().isoformat(),
                     "new_users": per.get((start_day + timedelta(days=i)).date().isoformat(), 0),
                 }
-                for i in range(14)
+                for i in range(diff_days)
             ]
 
         if gb == "month":
@@ -330,7 +341,19 @@ class AdminDashboardService:
         if gb == "day":
             end = to_dt or datetime.utcnow()
             end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
-            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+            if from_dt is not None:
+                start_day = datetime(from_dt.year, from_dt.month, from_dt.day)
+            else:
+                start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+
+            # Limit window size to 366 days max to protect resources
+            diff_days = (end_day - start_day).days + 1
+            if diff_days <= 0:
+                diff_days = 1
+            elif diff_days > 366:
+                diff_days = 366
+                start_day = end_day - timedelta(days=365)
+
             cancelled_cond = Order.status.in_(
                 [OrderStatus.CANCELLED, OrderStatus.CANCEL_REQUESTED]
             )
@@ -357,7 +380,7 @@ class AdminDashboardService:
                 per[key] = (int(total_o or 0), int(cancelled or 0))
 
             out: List[dict] = []
-            for i in range(14):
+            for i in range(diff_days):
                 key = (start_day + timedelta(days=i)).date().isoformat()
                 tot, canc = per.get(key, (0, 0))
                 rate = (canc / tot) if tot else 0.0

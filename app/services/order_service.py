@@ -706,11 +706,22 @@ class OrderService:
 
         gb = (group_by or "day").lower()
         if gb == "day":
-            # Always return the latest 14-day window for dashboard chart.
+            # Flexible date range calculation for dashboard chart.
             # Missing days are returned with zero values.
             end = to_dt or datetime.utcnow()
             end_day = datetime(end.year, end.month, end.day, 23, 59, 59, 999999)
-            start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+            if from_dt is not None:
+                start_day = datetime(from_dt.year, from_dt.month, from_dt.day)
+            else:
+                start_day = datetime(end.year, end.month, end.day) - timedelta(days=13)
+
+            # Limit window size to 366 days max to protect resources
+            diff_days = (end_day - start_day).days + 1
+            if diff_days <= 0:
+                diff_days = 1
+            elif diff_days > 366:
+                diff_days = 366
+                start_day = end_day - timedelta(days=365)
 
             period_expr = func.date(Order.order_date)
             stmt = (
@@ -735,7 +746,7 @@ class OrderService:
                 data_by_period[key] = (int(cnt), float(total or 0))
 
             out: List[dict] = []
-            for i in range(14):
+            for i in range(diff_days):
                 day = start_day + timedelta(days=i)
                 key = day.date().isoformat()
                 cnt, total = data_by_period.get(key, (0, 0.0))

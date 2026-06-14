@@ -52,3 +52,10 @@ class CancelRatePointOut(BaseModel):
     total_orders: int
     cancelled_count: int
     cancel_rate: float
+
+
+class RevenueTimeseriesRow(BaseModel):
+    period: str
+    order_count: int
+    revenue: float
+

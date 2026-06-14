@@ -19,6 +19,7 @@ from app.schemas.admin_dashboard import (
     TopBookRow,
     TopCustomerOut,
     UserTimeseriesRow,
+    RevenueTimeseriesRow,
 )
 from app.services.admin_dashboard_service import admin_dashboard_service
 from app.services.audit_service import record_admin_audit
@@ -98,6 +99,22 @@ async def dashboard_revenue_csv(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="revenue_timeseries.csv"'},
     )
+
+
+@router.get("/revenue-timeseries", response_model=list[RevenueTimeseriesRow])
+async def dashboard_revenue_timeseries(
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    group_by: Literal["day", "week", "month"] = Query("day"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    from_dt, to_dt = _range(from_d, to_d)
+    rows = await order_service.get_revenue_timeseries(
+        db, from_dt=from_dt, to_dt=to_dt, group_by=group_by
+    )
+    return [RevenueTimeseriesRow.model_validate(r) for r in rows]
+
 
 
 @router.get("/user-timeseries", response_model=list[UserTimeseriesRow])
