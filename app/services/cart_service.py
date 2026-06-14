@@ -11,6 +11,7 @@ from app.models.book_discount import BookDiscount
 from app.models.book_book_discount import BookBookDiscount
 from app.schemas.cart import CartCreate, CartUpdate, CartItemSummary
 from app.repositories.cart_repository import cart_repository
+from app.repositories.book_repository import book_repository
 
 
 class CartService:
@@ -19,6 +20,24 @@ class CartService:
     def __init__(self):
         self.repository = cart_repository
 
+    async def _validate_book_stock(
+        self,
+        db: AsyncSession,
+        book_id: int,
+        requested_quantity: int,
+    ) -> BookModel:
+        if requested_quantity <= 0:
+            raise ValueError("Quantity must be positive")
+        book = await book_repository.get(db, book_id)
+        if not book or book.deleted_at is not None:
+            raise ValueError("Book not found")
+        stock_quantity = int(book.stock_quantity or 0)
+        if requested_quantity > stock_quantity:
+            raise ValueError(
+                f"Requested quantity exceeds available stock ({stock_quantity})"
+            )
+        return book
+
     async def add_to_cart(
         self, db: AsyncSession, user_id: int, cart_in: CartCreate
     ) -> Cart:
@@ -26,8 +45,12 @@ class CartService:
         existing = await self.repository.get_by_user_and_book(
             db, user_id, cart_in.book_id
         )
+        requested_quantity = int(cart_in.quantity or 0)
         if existing:
-            existing.quantity = (existing.quantity or 0) + cart_in.quantity
+            requested_quantity = int(existing.quantity or 0) + requested_quantity
+        await self._validate_book_stock(db, cart_in.book_id, requested_quantity)
+        if existing:
+            existing.quantity = requested_quantity
             existing.update_at = date.today()
             await db.flush()
             await db.refresh(existing)
@@ -125,6 +148,7 @@ class CartService:
         cart = await self.repository.get(db, cart_id)
         if not cart or cart.user_id != user_id:
             return None
+        await self._validate_book_stock(db, cart.book_id, int(quantity or 0))
         cart.quantity = quantity
         cart.update_at = date.today()
         await db.flush()

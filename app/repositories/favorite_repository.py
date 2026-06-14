@@ -54,7 +54,11 @@ class FavoriteRepository:
             select(Book)
             .join(Favorite, Favorite.book_id == Book.id)
             .where(Favorite.user_id == user_id, Book.deleted_at.is_(None))
-            .options(selectinload(Book.book_detail), selectinload(Book.discounts))
+            .options(
+                selectinload(Book.book_detail),
+                selectinload(Book.discounts),
+                selectinload(Book.images),
+            )
             .order_by(Favorite.created_at.desc())
             .offset(skip)
             .limit(limit)

@@ -38,7 +38,10 @@ async def add_to_cart(
     current_user: User = Depends(get_current_active_user),
 ):
     """Add book to cart."""
-    return await cart_service.add_to_cart(db, current_user.id, cart_in)
+    try:
+        return await cart_service.add_to_cart(db, current_user.id, cart_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{cart_id}", response_model=Cart)
@@ -51,9 +54,12 @@ async def update_cart_item(
     """Update quantity in cart."""
     if cart_in.quantity is None:
         raise HTTPException(status_code=400, detail="Quantity is required")
-    cart = await cart_service.update_quantity(
-        db, cart_id, current_user.id, cart_in.quantity
-    )
+    try:
+        cart = await cart_service.update_quantity(
+            db, cart_id, current_user.id, cart_in.quantity
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not cart:
         raise HTTPException(status_code=404, detail="Item not found")
     return cart

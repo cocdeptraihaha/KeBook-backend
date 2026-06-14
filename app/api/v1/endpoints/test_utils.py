@@ -71,7 +71,11 @@ async def create_book_for_test(
     res = await db.execute(
         select(BookModel)
         .where(BookModel.id == bid)
-        .options(selectinload(BookModel.discounts))
+        .options(
+            selectinload(BookModel.book_detail),
+            selectinload(BookModel.discounts),
+            selectinload(BookModel.images),
+        )
     )
     loaded = res.scalars().first()
     if not loaded:

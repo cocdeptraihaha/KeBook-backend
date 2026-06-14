@@ -6,6 +6,7 @@ from pathlib import Path
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["TESTING"] = "1"
+os.environ["ENV"] = "test"
 
 # Xóa SQLite test cũ để create_all tạo lại schema (cột/bảng mới)
 _test_db_path = Path(__file__).resolve().parent.parent / "test.db"
@@ -33,7 +34,7 @@ def client():
         yield c
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def auth_headers(client: TestClient):
     """Đăng ký + verify OTP + trả về headers có token. Nếu user đã có thì login."""
     os.environ["TESTING"] = "1"
@@ -82,7 +83,7 @@ def auth_headers(client: TestClient):
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def user_headers(client: TestClient):
     """User thường (không phải admin) - dùng cho test requires_admin."""
     email = "user2@example.com"
@@ -122,7 +123,7 @@ def user_headers(client: TestClient):
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def empty_cart_headers(client: TestClient):
     """User có giỏ hàng rỗng - dùng cho test checkout empty cart."""
     email = "emptycart@example.com"
@@ -162,7 +163,7 @@ def empty_cart_headers(client: TestClient):
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def admin_headers(client: TestClient, auth_headers):
     """User đã login + set is_superuser."""
     r = client.post("/api/v1/test/make-admin?email=test@example.com")
