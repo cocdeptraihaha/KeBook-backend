@@ -80,7 +80,7 @@ async def dashboard_by_category(
 async def dashboard_revenue_csv(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month"] = Query("day"),
+    group_by: Literal["day", "week", "month", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -105,7 +105,7 @@ async def dashboard_revenue_csv(
 async def dashboard_revenue_timeseries(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month"] = Query("day"),
+    group_by: Literal["day", "week", "month", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -121,7 +121,7 @@ async def dashboard_revenue_timeseries(
 async def dashboard_user_timeseries(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month"] = Query("day"),
+    group_by: Literal["day", "week", "month", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -184,7 +184,7 @@ async def dashboard_cancellation_timeseries(
     request: Request,
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month"] = Query("day"),
+    group_by: Literal["day", "week", "month", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):

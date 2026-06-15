@@ -759,7 +759,9 @@ class OrderService:
                 )
             return out
 
-        if gb == "month":
+        if gb == "year":
+            period_expr = func.date_format(Order.order_date, "%Y")
+        elif gb == "month":
             period_expr = func.date_format(Order.order_date, "%Y-%m-01")
         elif gb == "week":
             period_expr = func.date_format(Order.order_date, "%X-W%V")
