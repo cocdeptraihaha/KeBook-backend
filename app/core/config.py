@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     MYSQL_SSL_CA: str = ""
     MYSQL_SSL_VERIFY: bool = True
 
+    # VNPAY payment settings
+    VNPAY_TMN_CODE: str = "DEMO"
+    VNPAY_HASH_SECRET: str = "DEMOHASHSECRET"
+    VNPAY_URL: str = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+    VNPAY_RETURN_URL: str = "http://localhost:5173/payment/vnpay-callback"
+
     # Điểm tặng khi tạo đánh giá mới (không tặng khi sửa review)
     REVIEW_REWARD_POINTS: int = 10
     # Cửa sổ ngày sau khi giao để được review (GET eligible + POST review)

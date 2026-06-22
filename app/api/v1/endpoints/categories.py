@@ -1,4 +1,5 @@
 """Category endpoints - danh mục sách."""
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,3 +62,19 @@ async def update_category(
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
     return await category_repository.update(db, cat, category_in)
+
+
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_superuser),
+):
+    """Delete category (soft delete, admin only)."""
+    cat = await category_repository.get(db, category_id)
+    if not cat or cat.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    cat.deleted_at = datetime.utcnow()
+    await db.flush()
+    return None
+

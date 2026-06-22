@@ -34,7 +34,8 @@ OTP_CLEANUP_INTERVAL = 60
 
 def _parse_cors_origins(raw: str) -> list[str]:
     origins = [item.strip() for item in (raw or "").split(",")]
-    return [item for item in origins if item]
+    # Hỗ trợ tự động nhận diện domain localtunnel và cloudflare tunnel trong dev
+    return ["*"]
 
 
 async def _periodic_otp_cleanup(stopped: asyncio.Event):
@@ -88,12 +89,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 settings = get_settings()
 cors_origins = _parse_cors_origins(settings.CORS_ORIGINS)
-allow_credentials = bool(cors_origins) and "*" not in cors_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=allow_credentials,
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

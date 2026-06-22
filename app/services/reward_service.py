@@ -39,7 +39,7 @@ class RewardService:
             ref_id=reward.id,
         )
         if already_redeemed:
-            raise ValueError("Ban da doi phan thuong nay roi")
+            raise ValueError("Bạn đã đổi phần thưởng này trước đó")
 
         await points_service.subtract_points(
             db,
@@ -53,7 +53,7 @@ class RewardService:
         now = datetime.utcnow()
         end = now + timedelta(days=max(1, int(reward.valid_days or 30)))
         code = f"PT{user_id}U{secrets.token_hex(4).upper()}"
-        name = f"{reward.name} (doi diem)"
+        name = f"{reward.name}"
         promo = Promotion(
             owner_user_id=user_id,
             code=code,

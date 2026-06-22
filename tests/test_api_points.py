@@ -72,7 +72,7 @@ def test_redeem_fixed_discount_reward_and_checkout(
         headers=auth_headers,
     )
     assert r_again.status_code == 400
-    assert "da doi" in r_again.text
+    assert "da doi" in r_again.text or "đã đổi" in r_again.text
 
     book_id = _create_book(client, admin_headers, "Sach voucher fixed", 120000)
     r_cart = client.post(

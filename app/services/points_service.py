@@ -12,6 +12,7 @@ class PointsService:
     REASON_REDEEM = "REDEEM_VOUCHER"
     REASON_ADMIN = "ADMIN_ADJUST"
     REASON_ORDER_CHECKOUT = "ORDER_CHECKOUT_REDEEM"
+    REASON_ORDER_COMPLETE = "ORDER_COMPLETE_AWARD"
 
     async def get_balance(self, db: AsyncSession, user_id: int) -> int:
         r = await db.execute(
