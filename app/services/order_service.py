@@ -75,6 +75,23 @@ class OrderService:
         )
         db.add(hist)
 
+    async def _restore_stock(self, db: AsyncSession, order: Order):
+        """Cộng lại số lượng sách vào kho khi đơn bị hủy."""
+        if not order.order_items:
+            return
+        book_ids = {item.book_id for item in order.order_items if item.book_id}
+        if not book_ids:
+            return
+        result_books = await db.execute(
+            select(Book).where(Book.id.in_(book_ids))
+        )
+        books_map = {b.id: b for b in result_books.scalars().all()}
+        for item in order.order_items:
+            if item.book_id:
+                book = books_map.get(item.book_id)
+                if book:
+                    book.stock_quantity = (book.stock_quantity or 0) + (item.quantity or 0)
+
     async def auto_confirm_if_needed(self, db: AsyncSession, order: Order) -> Order:
         """Lazy auto-confirm: nếu PENDING > 30 phút → CONFIRMED."""
         raw = str(order.status).replace("OrderStatus.", "")
@@ -234,6 +251,7 @@ class OrderService:
                 "CANCELLED",
                 description or "Admin chấp nhận hủy đơn",
             )
+            await self._restore_stock(db, order)
             await db.flush()
             await db.refresh(order)
             await notification_service.notify_order_status_for_buyer(
@@ -398,7 +416,15 @@ class OrderService:
 
         total = max(0.0, after_promo - points_discount_amount + shipping_fee)
 
-        payment = Payment(amount=total, method=PaymentMethod.COD, payment_status="PENDING")
+        method_str = (checkout_in.payment_method or "COD").upper()
+        if method_str == "VNPAY":
+            pay_method = PaymentMethod.VNPAY
+        elif method_str == "BANK_TRANSFER":
+            pay_method = PaymentMethod.BANK_TRANSFER
+        else:
+            pay_method = PaymentMethod.COD
+
+        payment = Payment(amount=total, method=pay_method, payment_status="PENDING")
         db.add(payment)
         await db.flush()
 
@@ -528,6 +554,13 @@ class OrderService:
         if new_status == "CANCELLED":
             if current not in CANCELLABLE_BY_ADMIN:
                 raise ValueError(f"Không thể hủy đơn ở trạng thái {current}")
+            # Load items to ensure we can restore stock
+            order_full = await self.repository.get_with_items(db, order_id)
+            if order_full:
+                await self._restore_stock(db, order_full)
+        elif current == "DELIVERED" and new_status == "RETURNED":
+            # Allow direct transition from DELIVERED to RETURNED
+            pass
         else:
             expected_next = NEXT_PROGRESS_STATUS.get(current)
             if expected_next is None or new_status != expected_next:
@@ -537,6 +570,20 @@ class OrderService:
 
         order.status = new_status
         self._add_history(db, order_id, new_status, description)
+
+        # Award loyalty points if order is completed: 1 point per 10,000 VND order value
+        if new_status == "COMPLETED" and order.total_price and order.total_price >= 10000:
+            points_to_award = int(order.total_price // 10000)
+            if points_to_award > 0:
+                await points_service.add_points(
+                    db,
+                    user_id=order.user_id,
+                    delta=points_to_award,
+                    reason=points_service.REASON_ORDER_COMPLETE,
+                    ref_type="order",
+                    ref_id=order.id,
+                )
+
         await db.flush()
         await db.refresh(order)
         from app.services.notification_service import notification_service
@@ -606,6 +653,7 @@ class OrderService:
         if current in ("PENDING", "CONFIRMED") and elapsed <= AUTO_CONFIRM_SECONDS:
             order.status = "CANCELLED"
             self._add_history(db, order.id, "CANCELLED", reason or "Người dùng hủy đơn")
+            await self._restore_stock(db, order)
             await db.flush()
             await db.refresh(order)
             from app.services.notification_service import notification_service
@@ -761,6 +809,8 @@ class OrderService:
 
         if gb == "year":
             period_expr = func.date_format(Order.order_date, "%Y")
+        elif gb == "quarter":
+            period_expr = func.concat(func.year(Order.order_date), "-Q", func.quarter(Order.order_date))
         elif gb == "month":
             period_expr = func.date_format(Order.order_date, "%Y-%m-01")
         elif gb == "week":

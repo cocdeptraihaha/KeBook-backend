@@ -7,7 +7,8 @@ def test_get_orders_empty(client: TestClient, empty_cart_headers):
     """Danh sách đơn hàng rỗng (user tách biệt, không dùng chung seed/test khác)."""
     r = client.get("/api/v1/orders/", headers=empty_cart_headers)
     assert r.status_code == 200
-    assert r.json() == []
+    res = r.json()
+    assert res["items"] == []
 
 
 def test_checkout_empty_cart(client: TestClient, empty_cart_headers):
@@ -241,6 +242,11 @@ def test_admin_status_only_allows_next_progress_or_cancel(
     assert r_cancel.status_code == 200, r_cancel.text
     assert r_cancel.json()["status"] == "CANCELLED"
 
+    # Kiểm tra lại stock của sách tăng lên 20 (ban đầu 20 - 1 checkout + 1 restore = 20)
+    r_book_check = client.get(f"/api/v1/books/{book_id}")
+    assert r_book_check.status_code == 200
+    assert r_book_check.json()["stock_quantity"] == 20
+
 
 def test_admin_cannot_cancel_delivered_order(
     client: TestClient, auth_headers, admin_headers
@@ -311,3 +317,91 @@ def test_admin_revenue_timeseries_always_14_days_with_zero_fill(
     assert rows[-1]["period"] == "2099-01-01"
     assert all("order_count" in row and "revenue" in row for row in rows)
     assert all(float(row["revenue"]) == 0.0 for row in rows)
+
+
+
+def test_vnpay_callback_success(client: TestClient, auth_headers, admin_headers):
+    """Test callback VNPAY xử lý thanh toán thành công."""
+    # 1. Tạo sách để checkout
+    r_book = client.post(
+        "/api/v1/books/",
+        headers=admin_headers,
+        json={
+            "title": "Sách test VNPAY Callback",
+            "author": "VNPAY",
+            "selling_price": 50000,
+            "stock_quantity": 10,
+        },
+    )
+    assert r_book.status_code == 201
+    book_id = r_book.json()["id"]
+
+    # 2. Thêm vào giỏ
+    client.post(
+        "/api/v1/cart/",
+        headers=auth_headers,
+        json={"book_id": book_id, "quantity": 1},
+    )
+
+    # 3. Checkout chọn VNPAY
+    r_co = client.post(
+        "/api/v1/orders/checkout",
+        headers=auth_headers,
+        json={
+            "phone_number": "0987654321",
+            "shipping_address": "VNPAY Test, HN",
+            "payment_method": "VNPAY",
+        },
+    )
+    assert r_co.status_code == 201
+    body = r_co.json()
+    assert "payment_url" in body
+
+    order_id = body["order"]["id"]
+
+    # 4. Giả lập VNPay callback thành công (ResponseCode = 00)
+    # Cần tạo chữ ký đúng chuẩn vnpay
+    import hmac
+    import hashlib
+    import urllib.parse
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    vnp_hash_secret = settings.VNPAY_HASH_SECRET
+
+    txn_ref = f"{order_id}_20260620000000"
+    vnp_params = {
+        "vnp_Amount": "5000000",
+        "vnp_BankCode": "NCB",
+        "vnp_BankTranNo": "VNP12345678",
+        "vnp_CardType": "ATM",
+        "vnp_OrderInfo": "Thanh toan don hang tai KeBook",
+        "vnp_PayDate": "20260620000000",
+        "vnp_ResponseCode": "00",
+        "vnp_TmnCode": settings.VNPAY_TMN_CODE,
+        "vnp_TransactionNo": "20260620111111",
+        "vnp_TransactionStatus": "00",
+        "vnp_TxnRef": txn_ref,
+    }
+
+    sorted_params = sorted(vnp_params.items())
+    query_string = urllib.parse.urlencode(sorted_params)
+    signature = hmac.new(
+        vnp_hash_secret.encode("utf-8"),
+        query_string.encode("utf-8"),
+        hashlib.sha512
+    ).hexdigest()
+
+    vnp_params["vnp_SecureHash"] = signature
+
+    # 5. Gọi endpoint callback
+    r_cb = client.get("/api/v1/orders/payment/vnpay-callback", params=vnp_params)
+    assert r_cb.status_code == 200
+    assert r_cb.json()["status"] == "SUCCESS"
+    assert r_cb.json()["order_id"] == order_id
+
+    # 6. Kiểm tra lại trạng thái đơn hàng -> CONFIRMED
+    r_detail = client.get(f"/api/v1/orders/{order_id}", headers=auth_headers)
+    assert r_detail.status_code == 200
+    assert r_detail.json()["status"] == "CONFIRMED"
+

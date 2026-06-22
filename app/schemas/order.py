@@ -53,6 +53,7 @@ class CheckoutRequest(BaseModel):
     province: Optional[str] = None
     ward: Optional[str] = None
     promotion_code: Optional[str] = None
+    payment_method: Optional[str] = "COD"  # COD, VNPAY, MOMO, SEPAY etc.
     """Số điểm tích lũy muốn đổi (VND giảm = điểm × LOYALTY_POINT_VALUE_VND), sau voucher, trong trần %."""
     loyalty_points_to_redeem: Optional[int] = None
     items: Optional[List[CheckoutItemIn]] = None
@@ -110,6 +111,8 @@ class Order(OrderBase):
     deleted_at: Optional[datetime] = None
     tracking_number: Optional[str] = None
     shipping_provider: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -127,6 +130,7 @@ class OrderCheckoutOut(BaseModel):
     total_amount: float
     loyalty_points_redeemed: int = 0
     points_discount_amount: float = 0.0
+    payment_url: Optional[str] = None
 
 
 class MoneyBucket(BaseModel):
