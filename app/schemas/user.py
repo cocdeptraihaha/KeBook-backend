@@ -26,6 +26,8 @@ class UserCreate(BaseModel):
     username: str
     full_name: Optional[str] = None
     password: str
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
 
 
 class UserCreateInDB(BaseModel):
@@ -35,6 +37,8 @@ class UserCreateInDB(BaseModel):
     username: str
     full_name: Optional[str] = None
     hashed_password: str
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
