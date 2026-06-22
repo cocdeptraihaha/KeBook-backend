@@ -58,6 +58,41 @@ class PromotionService:
     ) -> List[Promotion]:
         return await self.repository.get_multi_active(db, skip, limit)
 
+    async def get_available_promotions(
+        self, db: AsyncSession, order_total: float, user_id: Optional[int] = None
+    ) -> List[Promotion]:
+        """Lấy danh sách promotion còn hạn, chưa xóa, thỏa mãn min_order_amount và đúng chủ sở hữu (nếu là mã cá nhân)."""
+        now = datetime.utcnow()
+        stmt = (
+            select(Promotion)
+            .where(
+                Promotion.deleted_at.is_(None),
+                (Promotion.start_date.is_(None)) | (Promotion.start_date <= now),
+                (Promotion.end_date.is_(None)) | (Promotion.end_date >= now),
+            )
+        )
+        result = await db.execute(stmt)
+        promos = result.scalars().all()
+
+        out: List[Promotion] = []
+        for p in promos:
+            # Check owner
+            if getattr(p, "owner_user_id", None) is not None:
+                if user_id is None or int(user_id) != int(p.owner_user_id):
+                    continue
+            # Check min order amount
+            min_amt = getattr(p, "min_order_amount", None) or 0
+            if min_amt > 0 and float(order_total) < float(min_amt):
+                continue
+            # Check usage limit
+            usage_limit = getattr(p, "usage_limit", None)
+            if usage_limit is not None and int(usage_limit) > 0:
+                used = int(getattr(p, "used_count", 0) or 0)
+                if used >= int(usage_limit):
+                    continue
+            out.append(p)
+        return out
+
     async def get_usage_stats(self, db: AsyncSession, promotion_id: int) -> dict:
         r = await db.execute(
             select(

@@ -87,6 +87,19 @@ async def validate_promotion(
     }
 
 
+@router.get("/available", response_model=list[Promotion])
+async def list_available_promotions(
+    order_total: float = Query(0, ge=0, description="Total order amount"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Lấy danh sách các mã khuyến mại có thể áp dụng cho giỏ hàng hiện tại."""
+    uid = current_user.id if current_user else None
+    return await promotion_service.get_available_promotions(
+        db, order_total=order_total, user_id=uid
+    )
+
+
 @router.get("/", response_model=list[Promotion])
 async def list_promotions(
     skip: int = Query(0, ge=0),
