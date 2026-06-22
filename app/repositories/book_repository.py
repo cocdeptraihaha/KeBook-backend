@@ -79,8 +79,12 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         self,
         q: Optional[str] = None,
         category_id: Optional[int] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
+        min_rating: Optional[float] = None,
+        publisher: Optional[str] = None,
     ):
-        """Build a select statement for paginated book listing."""
+        """Build a select statement for paginated book listing with advanced filters."""
         from sqlalchemy import or_
 
         stmt = (
@@ -113,7 +117,29 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         else:
             stmt = stmt.join(BookCategory, BookCategory.book_id == Book.id, isouter=True)
 
-        stmt = stmt.where(Book.deleted_at.is_(None)).order_by(Book.id)
+        stmt = stmt.where(Book.deleted_at.is_(None))
+        stmt = stmt.where(Book.stock_quantity > 0)  # Auto-hide out of stock items from public store
+
+        # Advanced Filters
+        if min_price is not None:
+            stmt = stmt.where(Book.selling_price >= min_price)
+        if max_price is not None:
+            stmt = stmt.where(Book.selling_price <= max_price)
+        if publisher is not None and publisher.strip() != "":
+            stmt = stmt.where(func.lower(BookDetail.publisher) == publisher.lower().strip())
+        if min_rating is not None:
+            from app.models.review import Review
+            stmt = stmt.where(
+                exists(
+                    select(1)
+                    .select_from(Review)
+                    .where(Review.book_id == Book.id)
+                    .group_by(Review.book_id)
+                    .having(func.avg(Review.rating) >= min_rating)
+                )
+            )
+
+        stmt = stmt.order_by(Book.id)
         if q:
             pattern = f"%{q.lower()}%"
             stmt = stmt.where(

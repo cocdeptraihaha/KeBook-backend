@@ -44,9 +44,24 @@ class BookService:
     ) -> List[Book]:
         return await self.repository.search(db, q, skip, limit)
 
-    def build_list_query(self, q: Optional[str] = None, category_id: Optional[int] = None):
-        """Delegate to repository for paginated listing."""
-        return self.repository.build_list_query(q=q, category_id=category_id)
+    def build_list_query(
+        self,
+        q: Optional[str] = None,
+        category_id: Optional[int] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
+        min_rating: Optional[float] = None,
+        publisher: Optional[str] = None,
+    ):
+        """Delegate to repository for paginated listing with advanced filters."""
+        return self.repository.build_list_query(
+            q=q,
+            category_id=category_id,
+            min_price=min_price,
+            max_price=max_price,
+            min_rating=min_rating,
+            publisher=publisher,
+        )
 
     async def get_top_selling(self, db: AsyncSession, limit: int = 10) -> List[Book]:
         return await self.repository.get_top_selling(db, limit)

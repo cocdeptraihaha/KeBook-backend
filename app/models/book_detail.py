@@ -1,5 +1,5 @@
 """BookDetail model - thông tin chi tiết sách."""
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,7 +10,7 @@ class BookDetail(Base):
     __tablename__ = "book_details"
 
     id = Column(Integer, primary_key=True, index=True)
-    description = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
     height = Column(Float, nullable=True)
     image_url = Column(String(255), nullable=True)
     length = Column(Float, nullable=True)

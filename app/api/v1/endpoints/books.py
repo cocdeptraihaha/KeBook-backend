@@ -67,10 +67,21 @@ async def admin_low_stock_books(
 async def list_books(
     q: str | None = Query(None, description="Search by title, author"),
     category_id: int | None = Query(None, description="Filter books by category_id"),
+    min_price: float | None = Query(None, description="Minimum price filter"),
+    max_price: float | None = Query(None, description="Maximum price filter"),
+    min_rating: float | None = Query(None, description="Minimum rating filter"),
+    publisher: str | None = Query(None, description="Publisher name filter"),
     db: AsyncSession = Depends(get_db),
 ):
-    """List books with pagination (public - no auth required)."""
-    stmt = book_service.build_list_query(q=q, category_id=category_id)
+    """List books with pagination and advanced filtering."""
+    stmt = book_service.build_list_query(
+        q=q,
+        category_id=category_id,
+        min_price=min_price,
+        max_price=max_price,
+        min_rating=min_rating,
+        publisher=publisher,
+    )
     return await apaginate(db, stmt)
 
 
