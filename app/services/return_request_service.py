@@ -28,8 +28,8 @@ class ReturnRequestService:
             raise ValueError("Order not found or does not belong to you")
 
         raw_status = str(order.status).replace("OrderStatus.", "")
-        if raw_status not in ("COMPLETED", "DELIVERED"):
-            raise ValueError("Return request only allowed when order is delivered")
+        if raw_status not in ("COMPLETED", "DELIVERED", "SHIPPED"):
+            raise ValueError("Return request only allowed when order is shipped, delivered, or completed")
 
         result = await db.execute(
             select(OrderItem).where(OrderItem.id == req_in.order_item_id)
@@ -45,6 +45,8 @@ class ReturnRequestService:
             order_item_id=req_in.order_item_id,
             quantity=req_in.quantity,
             reason=req_in.reason,
+            image_url=req_in.image_url,
+            refund_amount=req_in.refund_amount or 0.0,
             request_date=datetime.utcnow(),
             status="PENDING",
         )
@@ -102,6 +104,8 @@ class ReturnRequestService:
                 "order_item_id": req.order_item_id,
                 "quantity": req.quantity,
                 "reason": req.reason,
+                "image_url": req.image_url,
+                "refund_amount": float(req.refund_amount or 0.0),
                 "request_date": req.request_date,
                 "processed_date": req.processed_date,
                 "status": status_str,

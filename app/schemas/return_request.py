@@ -7,6 +7,8 @@ from datetime import datetime
 class ReturnRequestBase(BaseModel):
     quantity: int = 1
     reason: Optional[str] = None
+    image_url: Optional[str] = None
+    refund_amount: Optional[float] = 0.0
 
 
 class ReturnRequestCreate(ReturnRequestBase):

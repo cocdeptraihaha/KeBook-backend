@@ -1,6 +1,6 @@
 """ReturnRequest model - yêu cầu trả hàng."""
 import enum
-from sqlalchemy import Column, Integer, Text, DateTime, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, Integer, Text, DateTime, Enum as SQLEnum, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -20,6 +20,8 @@ class ReturnRequest(Base):
     processed_date = Column(DateTime, nullable=True)
     quantity = Column(Integer, nullable=False)
     reason = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    refund_amount = Column(Float, default=0.0, nullable=True)
     request_date = Column(DateTime, nullable=False)
     status = Column(SQLEnum(ReturnRequestStatus), nullable=False)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
