@@ -20,6 +20,7 @@ from app.schemas.admin_dashboard import (
     TopCustomerOut,
     UserTimeseriesRow,
     RevenueTimeseriesRow,
+    BuyerGenderRow,
 )
 from app.services.admin_dashboard_service import admin_dashboard_service
 from app.services.audit_service import record_admin_audit
@@ -80,7 +81,7 @@ async def dashboard_by_category(
 async def dashboard_revenue_csv(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month", "year"] = Query("day"),
+    group_by: Literal["day", "week", "month", "quarter", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -105,7 +106,7 @@ async def dashboard_revenue_csv(
 async def dashboard_revenue_timeseries(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month", "year"] = Query("day"),
+    group_by: Literal["day", "week", "month", "quarter", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -121,7 +122,7 @@ async def dashboard_revenue_timeseries(
 async def dashboard_user_timeseries(
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month", "year"] = Query("day"),
+    group_by: Literal["day", "week", "month", "quarter", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
@@ -184,7 +185,7 @@ async def dashboard_cancellation_timeseries(
     request: Request,
     from_d: Optional[date] = Query(None, alias="from"),
     to_d: Optional[date] = Query(None, alias="to"),
-    group_by: Literal["day", "week", "month", "year"] = Query("day"),
+    group_by: Literal["day", "week", "month", "quarter", "year"] = Query("day"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_superuser),
 ):
@@ -205,3 +206,18 @@ async def dashboard_cancellation_timeseries(
         ip=request.client.host if request.client else None,
     )
     return [CancelRatePointOut.model_validate(r) for r in rows]
+
+
+@router.get("/buyer-gender", response_model=list[BuyerGenderRow])
+async def dashboard_buyer_gender(
+    from_d: Optional[date] = Query(None, alias="from"),
+    to_d: Optional[date] = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    from_dt, to_dt = _range(from_d, to_d)
+    rows = await admin_dashboard_service.buyer_gender_distribution(
+        db, from_dt=from_dt, to_dt=to_dt
+    )
+    return [BuyerGenderRow.model_validate(r) for r in rows]
+

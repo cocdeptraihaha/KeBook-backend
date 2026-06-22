@@ -59,3 +59,10 @@ class RevenueTimeseriesRow(BaseModel):
     order_count: int
     revenue: float
 
+
+class BuyerGenderRow(BaseModel):
+    gender: str
+    user_count: int
+    revenue: float
+    order_count: int
+

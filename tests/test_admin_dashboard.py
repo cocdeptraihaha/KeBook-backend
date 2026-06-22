@@ -52,3 +52,4 @@ def test_user_timeseries_always_14_days(client: TestClient, admin_headers: dict)
     assert len(rows) == 14
     assert rows[0]["period"] == "2098-12-19"
     assert rows[-1]["period"] == "2099-01-01"
+

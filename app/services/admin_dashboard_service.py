@@ -224,6 +224,8 @@ class AdminDashboardService:
 
         if gb == "year":
             period_expr = func.date_format(User.created_at, "%Y")
+        elif gb == "quarter":
+            period_expr = func.concat(func.year(User.created_at), "-Q", func.quarter(User.created_at))
         elif gb == "month":
             period_expr = func.date_format(User.created_at, "%Y-%m-01")
         elif gb == "week":
@@ -398,6 +400,8 @@ class AdminDashboardService:
 
         if gb == "year":
             period_expr = func.date_format(Order.order_date, "%Y")
+        elif gb == "quarter":
+            period_expr = func.concat(func.year(Order.order_date), "-Q", func.quarter(Order.order_date))
         elif gb == "month":
             period_expr = func.date_format(Order.order_date, "%Y-%m-01")
         elif gb == "week":
@@ -447,6 +451,49 @@ class AdminDashboardService:
                 }
             )
         return out
+
+    async def buyer_gender_distribution(
+        self,
+        db: AsyncSession,
+        *,
+        from_dt: Optional[datetime] = None,
+        to_dt: Optional[datetime] = None,
+    ) -> List[dict]:
+        """Calculates revenue, order count, and customer count grouped by user's gender."""
+        # Query successful/delivered orders, joining with user profile
+        stmt = (
+            select(
+                func.coalesce(User.gender, "Chưa xác định").label("gender"),
+                func.count(func.distinct(User.id)).label("user_count"),
+                func.count(Order.id).label("order_count"),
+                func.coalesce(func.sum(Order.total_price), 0.0).label("revenue"),
+            )
+            .join(User, Order.user_id == User.id)
+            .where(
+                Order.deleted_at.is_(None),
+                User.deleted_at.is_(None),
+                Order.status.in_([OrderStatus.DELIVERED, OrderStatus.COMPLETED]),
+            )
+            .group_by(func.coalesce(User.gender, "Chưa xác định"))
+        )
+
+        if from_dt is not None:
+            stmt = stmt.where(Order.order_date >= from_dt)
+        if to_dt is not None:
+            stmt = stmt.where(Order.order_date <= to_dt)
+
+        r = await db.execute(stmt)
+        rows = r.all()
+        return [
+            {
+                "gender": str(row.gender or "Chưa xác định").strip() or "Chưa xác định",
+                "user_count": int(row.user_count or 0),
+                "order_count": int(row.order_count or 0),
+                "revenue": float(row.revenue or 0.0),
+            }
+            for row in rows
+        ]
+
 
 
 admin_dashboard_service = AdminDashboardService()
