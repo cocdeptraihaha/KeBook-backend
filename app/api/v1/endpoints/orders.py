@@ -15,6 +15,7 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 
 from app.api.dependencies import get_current_active_user, get_current_superuser
 from app.core.database import get_db
+from app.core.ratelimit import limiter
 from app.models.book import Book
 from app.models.book_detail import BookDetail
 from app.models.book_image import BookImage
@@ -100,12 +101,19 @@ async def get_my_orders(
     for o in orders_list:
         await order_service.auto_confirm_if_needed(db, o)
         payment_method, payment_status = await _get_payment_info(db, o)
+        direct_payment_status = None
+        if getattr(o, "payment_status", None):
+            if hasattr(o.payment_status, "value"):
+                direct_payment_status = o.payment_status.value
+            else:
+                direct_payment_status = str(o.payment_status)
         new_items.append(
             OrderWithItems.model_validate(
                 {
                     **Order.model_validate(o).model_dump(),
                     "payment_method": payment_method,
-                    "payment_status": payment_status,
+                    "payment_status": direct_payment_status or "UNPAID",
+                    "transaction_status": payment_status,
                     "order_items": await _build_order_items_payload(
                         db, o.order_items or []
                     ),
@@ -172,6 +180,27 @@ async def checkout_from_cart(
     current_user: User = Depends(get_current_active_user),
 ):
     """Checkout from cart - create order from cart."""
+    import os
+    from datetime import timedelta
+    from app.models.order import Order as OrderModel
+    from sqlalchemy import desc
+
+    if os.environ.get("TESTING") != "1":
+        latest_order_res = await db.execute(
+            select(OrderModel)
+            .where(OrderModel.user_id == current_user.id)
+            .order_by(desc(OrderModel.order_date))
+            .limit(1)
+        )
+        latest_order = latest_order_res.scalars().first()
+        if latest_order:
+            delta = datetime.utcnow() - latest_order.order_date
+            if delta < timedelta(seconds=30):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Thao tác quá nhanh. Vui lòng đợi 30 giây giữa các lần đặt hàng."
+                )
+
     try:
         (
             order,
@@ -302,12 +331,19 @@ async def admin_list_orders(
     new_items = []
     for o in orders_list:
         payment_method, payment_status = await _get_payment_info(db, o)
+        direct_payment_status = None
+        if getattr(o, "payment_status", None):
+            if hasattr(o.payment_status, "value"):
+                direct_payment_status = o.payment_status.value
+            else:
+                direct_payment_status = str(o.payment_status)
         new_items.append(
             OrderWithItems.model_validate(
                 {
                     **Order.model_validate(o).model_dump(),
                     "payment_method": payment_method,
-                    "payment_status": payment_status,
+                    "payment_status": direct_payment_status or "UNPAID",
+                    "transaction_status": payment_status,
                     "order_items": await _build_order_items_payload(
                         db, o.order_items or []
                     ),
@@ -588,6 +624,8 @@ async def vnpay_callback(
         else:
             payment.payment_status = "SUCCESS"
             order.status = "CONFIRMED"
+            from app.models.order import OrderPaymentStatus
+            order.payment_status = OrderPaymentStatus.PAID
             order_service._add_history(
                 db,
                 order.id,
@@ -679,15 +717,63 @@ async def _serialize_order_with_items(db: AsyncSession, order) -> OrderWithItems
         for h in (order.status_history or [])
     ]
     payment_method, payment_status = await _get_payment_info(db, order)
+
+    # Load shipping fee from service price
+    shipping_fee = 0.0
+    if "service" in order.__dict__ and order.service is not None:
+        shipping_fee = float(order.service.price or 0.0)
+    elif getattr(order, "service_id", None):
+        from app.models.service import Service
+        srv_res = await db.execute(select(Service).where(Service.id == order.service_id))
+        srv = srv_res.scalars().first()
+        if srv:
+            shipping_fee = float(srv.price or 0.0)
+
+    # Load voucher discount from order_promotion
+    discount_amount = 0.0
+    from app.models.order_promotion import OrderPromotion
+    promo_res = await db.execute(select(OrderPromotion).where(OrderPromotion.order_id == order.id))
+    promos = promo_res.scalars().all()
+    discount_amount = sum(float(p.discount_amount or 0.0) for p in promos)
+
+    # Load loyalty points discount from point_transactions
+    points_discount = 0.0
+    from app.models.point_transaction import PointTransaction
+    from app.core.config import get_settings
+    pts_res = await db.execute(
+        select(PointTransaction).where(
+            PointTransaction.ref_type == "order",
+            PointTransaction.ref_id == order.id,
+            PointTransaction.delta < 0
+        )
+    )
+    pts_tx = pts_res.scalars().first()
+    if pts_tx:
+        settings = get_settings()
+        point_val = max(0.0001, float(settings.LOYALTY_POINT_VALUE_VND or 1.0))
+        points_discount = abs(pts_tx.delta) * point_val
+
+    # Retrieve order level payment status
+    direct_payment_status = None
+    if getattr(order, "payment_status", None):
+        if hasattr(order.payment_status, "value"):
+            direct_payment_status = order.payment_status.value
+        else:
+            direct_payment_status = str(order.payment_status)
+
     return OrderWithItems.model_validate(
         {
             **Order.model_validate(order).model_dump(),
             "payment_method": payment_method,
-            "payment_status": payment_status,
+            "payment_status": direct_payment_status or "UNPAID",
+            "transaction_status": payment_status,
             "order_items": await _build_order_items_payload(
                 db, order.order_items or []
             ),
             "status_history": [h.model_dump() for h in history_out],
+            "shipping_fee": shipping_fee,
+            "discount_amount": discount_amount,
+            "points_discount": points_discount,
         }
     )
 

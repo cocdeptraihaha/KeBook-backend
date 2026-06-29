@@ -3,11 +3,12 @@ import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order_promotion import OrderPromotion
 from app.models.promotion import Promotion
+from app.models.user_promotion import UserPromotion
 from app.schemas.promotion import PromotionCreate, PromotionUpdate
 from app.repositories.promotion_repository import promotion_repository
 
@@ -76,6 +77,20 @@ class PromotionService:
 
         out: List[Promotion] = []
         for p in promos:
+            # Check if user already used this promotion
+            if user_id is not None:
+                already_used = await db.execute(
+                    select(UserPromotion).where(
+                        and_(
+                            UserPromotion.user_id == user_id,
+                            UserPromotion.promotion_id == p.id,
+                            UserPromotion.order_id.is_not(None),
+                        )
+                    )
+                )
+                if already_used.scalars().first():
+                    continue
+
             # Check owner
             if getattr(p, "owner_user_id", None) is not None:
                 if user_id is None or int(user_id) != int(p.owner_user_id):

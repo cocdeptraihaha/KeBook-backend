@@ -17,6 +17,11 @@ class OrderStatus(str, enum.Enum):
     SHIPPED = "SHIPPED"
 
 
+class OrderPaymentStatus(str, enum.Enum):
+    UNPAID = "UNPAID"
+    PAID = "PAID"
+
+
 class Order(Base):
     """Bảng orders."""
 
@@ -31,6 +36,7 @@ class Order(Base):
     tracking_number = Column(String(64), nullable=True)
     shipping_provider = Column(String(64), nullable=True)
     status = Column(SQLEnum(OrderStatus), nullable=True)
+    payment_status = Column(SQLEnum(OrderPaymentStatus), default=OrderPaymentStatus.UNPAID, nullable=False)
     total_price = Column(Float, nullable=True)
     payment_id = Column(Integer, ForeignKey("payment.id"), nullable=False)
     service_id = Column(Integer, ForeignKey("service.id"), nullable=False)

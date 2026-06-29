@@ -5,7 +5,7 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.order import Order
+from app.models.order import Order, OrderPaymentStatus
 from app.models.order_item import OrderItem
 from app.models.order_promotion import OrderPromotion
 from app.models.order_status_history import OrderStatusHistory, OrderHistoryStatus
@@ -138,6 +138,7 @@ class OrderService:
             phone_number=order_in.phone_number,
             shipping_address=order_in.shipping_address,
             status="PENDING",
+            payment_status=OrderPaymentStatus.UNPAID,
             total_price=total,
             order_date=datetime.utcnow(),
         )
@@ -469,6 +470,7 @@ class OrderService:
             phone_number=phone_number,
             shipping_address=full_address,
             status="PENDING",
+            payment_status=OrderPaymentStatus.UNPAID,
             total_price=total,
             order_date=datetime.utcnow(),
         )
@@ -569,6 +571,8 @@ class OrderService:
                 )
 
         order.status = new_status
+        if new_status in ("DELIVERED", "COMPLETED"):
+            order.payment_status = OrderPaymentStatus.PAID
         self._add_history(db, order_id, new_status, description)
 
         # Award loyalty points if order is completed: 1 point per 10,000 VND order value

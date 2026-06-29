@@ -113,6 +113,7 @@ class Order(OrderBase):
     shipping_provider: Optional[str] = None
     payment_method: Optional[str] = None
     payment_status: Optional[str] = None
+    transaction_status: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -120,6 +121,9 @@ class Order(OrderBase):
 class OrderWithItems(Order):
     order_items: List[OrderItem] = []
     status_history: List[OrderStatusHistoryOut] = []
+    shipping_fee: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    points_discount: Optional[float] = 0.0
 
 
 class OrderCheckoutOut(BaseModel):

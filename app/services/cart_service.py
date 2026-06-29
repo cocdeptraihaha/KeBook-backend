@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.cart import Cart
 from app.models.book import Book as BookModel
 from app.models.book_detail import BookDetail as BookDetailModel
+from app.models.book_image import BookImage
 from app.models.book_discount import BookDiscount
 from app.models.book_book_discount import BookBookDiscount
 from app.schemas.cart import CartCreate, CartUpdate, CartItemSummary
@@ -103,13 +104,21 @@ class CartService:
             .group_by(BookBookDiscount.book_id)
             .subquery()
         )
+        img_subq = (
+            select(
+                BookImage.book_id,
+                BookImage.image_url,
+            )
+            .where(BookImage.is_primary == True)
+            .subquery()
+        )
         stmt = (
             select(
                 Cart,
                 BookModel.title,
                 BookModel.selling_price,
                 BookModel.stock_quantity,
-                BookDetailModel.image_url,
+                func.coalesce(img_subq.c.image_url, BookDetailModel.image_url).label("image_url"),
                 func.coalesce(disc_subq.c.best_discount, 0.0).label("best_discount"),
             )
             .join(BookModel, Cart.book_id == BookModel.id)
@@ -118,6 +127,7 @@ class CartService:
                 BookModel.book_detail_id == BookDetailModel.id,
                 isouter=True,
             )
+            .join(img_subq, BookModel.id == img_subq.c.book_id, isouter=True)
             .join(disc_subq, BookModel.id == disc_subq.c.book_id, isouter=True)
             .where(Cart.user_id == user_id)
         )
