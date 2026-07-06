@@ -212,4 +212,4 @@ Bộ sưu tập được thiết kế tối ưu hóa với các đoạn mã ti�
 Hệ thống **KeBook Backend** đã chứng minh tính hiệu quả vượt trội trong việc ứng dụng kiến trúc phân tầng kết hợp lập trình bất đồng bộ. Việc tổ chức mã nguồn chuẩn hóa giúp giảm tối đa rủi ro xung đột mã nguồn và tăng cường khả năng bảo trì. Sự kết hợp giữa các giải pháp bảo mật JWT, băm mật khẩu Bcrypt và xác thực OTP Email tạo dựng một nền tảng vững chắc, sẵn sàng đáp ứng tải lượng người dùng lớn trong môi trường thực tế.
 
 ---
-*Tài liệu thuộc Chương trình Nghiên cứu & Phát triển Hệ thống Web Nâng cao - Dự án KeBook.*
+*Tài liệu thuộc Chương trình Nghiên cứu & Phát triển Hệ thống Web - Dự án KeBook.*
