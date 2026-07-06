@@ -40,10 +40,14 @@ Thumbs.db
 htmlcov/
 tests/
 test_*.py
+pytest.ini
 
 # Docker
 Dockerfile
 .dockerignore
+
+# Postman
+postman/
 
 # Agents / local tooling
 .agents/
