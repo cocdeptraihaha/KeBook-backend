@@ -38,8 +38,16 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+tests/
+test_*.py
+
+# Docker
+Dockerfile
+.dockerignore
 
 # Agents / local tooling
 .agents/
 .cursor/
 skills-lock.json
+.claude/
+docs/
